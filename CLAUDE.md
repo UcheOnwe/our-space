@@ -257,3 +257,24 @@ Route-level screens belong in `pages/`.
 Truly reusable UI elements belong in shared `components/`.
 
 The frontend and backend communicate through the REST API rather than importing application logic from one another.
+
+## CODE READABILITY AND COMMENTS
+
+Code should remain understandable to a human engineer reviewing AI-generated work.
+
+Prefer:
+- clear names,
+- small focused functions/classes,
+- straightforward control flow,
+- established framework conventions.
+
+Add comments or docstrings when they explain:
+- non-obvious business rules,
+- architectural decisions,
+- security behavior,
+- framework-specific behavior that is easy to misunderstand,
+- unusual workarounds or implementation constraints.
+
+Do not add comments that merely restate obvious code line-by-line.
+
+For important new framework-specific code, prefer concise docstrings/comments that explain WHY the code exists and its responsibility.
