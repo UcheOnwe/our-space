@@ -1,0 +1,86 @@
+name: CI
+
+# Runs on every pull request targeting master. This is CI only — it checks
+# code, it does not deploy anything.
+on:
+  pull_request:
+    branches: [master]
+
+jobs:
+  backend-tests:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    # Backend settings require PostgreSQL (see config/settings.py) — no
+    # SQLite fallback — so CI needs a real Postgres instance, mirroring
+    # backend/docker-compose.yml used for local development.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: our_space
+          POSTGRES_USER: our_space
+          POSTGRES_PASSWORD: our_space
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U our_space"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DJANGO_SECRET_KEY: ci-test-secret-key
+      DJANGO_DEBUG: "False"
+      POSTGRES_DB: our_space
+      POSTGRES_USER: our_space
+      POSTGRES_PASSWORD: our_space
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check for missing migrations
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Run backend tests
+        run: python manage.py test
+
+  frontend-checks:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Run frontend tests
+        run: npm run test
+
+      - name: Type-check and build
+        run: npm run build
