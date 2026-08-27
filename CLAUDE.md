@@ -278,3 +278,21 @@ Add comments or docstrings when they explain:
 Do not add comments that merely restate obvious code line-by-line.
 
 For important new framework-specific code, prefer concise docstrings/comments that explain WHY the code exists and its responsibility.
+
+## Implementation Flow Explanations
+
+For any meaningful feature or vertical-slice implementation:
+
+- After implementation, provide a short visual flow showing how the main pieces interact.
+- Show the request/data flow in execution order, not just a list of files.
+- Clearly distinguish:
+  - visible UI/pages,
+  - reusable UI components,
+  - frontend state/context,
+  - API/client communication,
+  - backend endpoints/services,
+  - database interaction when applicable.
+- Use a compact ASCII diagram with arrows.
+- Mention the main files responsible at each step.
+- Do not create diagrams for trivial edits or individual bug fixes unless the flow changes.
+- Keep explanations concise and focused on helping the developer understand and explain the architecture.
