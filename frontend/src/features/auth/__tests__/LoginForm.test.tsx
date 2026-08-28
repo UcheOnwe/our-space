@@ -21,7 +21,7 @@ function AuthProbe() {
 }
 
 const CSRF_URL = '/api/auth/csrf/'
-const ME_URL = '/api/auth/me/'
+const USER_PROFILE_URL = '/api/auth/user-profile/'
 const LOGIN_URL = '/api/auth/login/'
 
 beforeEach(() => {
@@ -37,7 +37,7 @@ function mockBackend() {
 
     if (url.endsWith(CSRF_URL)) return Promise.resolve(jsonResponse(200, { detail: 'ok' }))
 
-    if (url.endsWith(ME_URL)) {
+    if (url.endsWith(USER_PROFILE_URL)) {
       return loggedIn
         ? Promise.resolve(jsonResponse(200, { id: 1, username: 'alice', email: '' }))
         : Promise.resolve(jsonResponse(403, { detail: 'Forbidden' }))

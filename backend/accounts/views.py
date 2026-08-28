@@ -69,7 +69,9 @@ class LogoutView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class MeView(APIView):
+class UserProfileView(APIView):
+    """Returns the authenticated user's own profile (id, username, email)."""
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):

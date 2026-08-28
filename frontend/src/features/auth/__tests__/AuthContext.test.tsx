@@ -26,7 +26,7 @@ function AuthProbe() {
   )
 }
 
-const ME_URL = '/api/auth/me/'
+const USER_PROFILE_URL = '/api/auth/user-profile/'
 const CSRF_URL = '/api/auth/csrf/'
 const LOGOUT_URL = '/api/auth/logout/'
 
@@ -41,7 +41,7 @@ describe('AuthProvider bootstrap (refresh persistence)', () => {
       vi.fn((input: RequestInfo | URL) => {
         const url = input.toString()
         if (url.endsWith(CSRF_URL)) return Promise.resolve(jsonResponse(200, { detail: 'ok' }))
-        if (url.endsWith(ME_URL)) {
+        if (url.endsWith(USER_PROFILE_URL)) {
           return Promise.resolve(jsonResponse(200, { id: 1, username: 'alice', email: 'alice@example.com' }))
         }
         throw new Error(`Unexpected fetch to ${url}`)
@@ -66,7 +66,7 @@ describe('AuthProvider bootstrap (refresh persistence)', () => {
       vi.fn((input: RequestInfo | URL) => {
         const url = input.toString()
         if (url.endsWith(CSRF_URL)) return Promise.resolve(jsonResponse(200, { detail: 'ok' }))
-        if (url.endsWith(ME_URL)) return Promise.resolve(jsonResponse(403, { detail: 'Forbidden' }))
+        if (url.endsWith(USER_PROFILE_URL)) return Promise.resolve(jsonResponse(403, { detail: 'Forbidden' }))
         throw new Error(`Unexpected fetch to ${url}`)
       }),
     )
@@ -87,7 +87,7 @@ describe('logout', () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
       const url = input.toString()
       if (url.endsWith(CSRF_URL)) return Promise.resolve(jsonResponse(200, { detail: 'ok' }))
-      if (url.endsWith(ME_URL)) {
+      if (url.endsWith(USER_PROFILE_URL)) {
         return Promise.resolve(jsonResponse(200, { id: 1, username: 'alice', email: '' }))
       }
       if (url.endsWith(LOGOUT_URL)) return Promise.resolve(jsonResponse(204, null))
