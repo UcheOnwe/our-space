@@ -17,7 +17,7 @@ class RegisterTests(APITestCase):
         self.assertTrue(User.objects.filter(username="alice").exists())
 
         # Registration should log the user in immediately.
-        me_response = self.client.get("/api/auth/me/")
+        me_response = self.client.get("/api/auth/user-profile/")
         self.assertEqual(me_response.status_code, status.HTTP_200_OK)
         self.assertEqual(me_response.data["username"], "alice")
 
@@ -54,7 +54,7 @@ class LoginTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["username"], "alice")
 
-        me_response = self.client.get("/api/auth/me/")
+        me_response = self.client.get("/api/auth/user-profile/")
         self.assertEqual(me_response.status_code, status.HTTP_200_OK)
 
     def test_login_with_wrong_password_is_rejected(self):
@@ -67,7 +67,7 @@ class LoginTests(APITestCase):
 
         # DRF's SessionAuthentication has no WWW-Authenticate scheme, so an
         # unauthenticated request is a 403, not a 401.
-        me_response = self.client.get("/api/auth/me/")
+        me_response = self.client.get("/api/auth/user-profile/")
         self.assertEqual(me_response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_login_with_unknown_username_is_rejected(self):
@@ -89,7 +89,7 @@ class LogoutTests(APITestCase):
         response = self.client.post("/api/auth/logout/")
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
-        me_response = self.client.get("/api/auth/me/")
+        me_response = self.client.get("/api/auth/user-profile/")
         self.assertEqual(me_response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_logout_requires_authentication(self):
@@ -97,20 +97,20 @@ class LogoutTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
-class MeTests(APITestCase):
+class UserProfileTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(
             username="alice", email="alice@example.com", password="a-strong-password-1"
         )
 
     def test_me_requires_authentication(self):
-        response = self.client.get("/api/auth/me/")
+        response = self.client.get("/api/auth/user-profile/")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_me_returns_current_user(self):
         self.client.login(username="alice", password="a-strong-password-1")
 
-        response = self.client.get("/api/auth/me/")
+        response = self.client.get("/api/auth/user-profile/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["username"], "alice")

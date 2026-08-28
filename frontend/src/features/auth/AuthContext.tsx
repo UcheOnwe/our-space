@@ -47,8 +47,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function login(input: LoginInput) {
     await loginUser(input)
-    // Re-fetch via /me/ rather than trusting the login response body, so the
-    // frontend's authenticated state reflects what the session actually is.
+    // Re-fetch the user profile rather than trusting the login response
+    // body, so the frontend's authenticated state reflects what the
+    // session actually is.
     const user = await fetchCurrentUser()
     setState({ status: 'authenticated', user })
   }

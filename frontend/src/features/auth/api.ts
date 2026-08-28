@@ -19,5 +19,5 @@ export function logoutUser(): Promise<void> {
 }
 
 export function fetchCurrentUser(): Promise<User> {
-  return apiClient.get('/auth/me/')
+  return apiClient.get('/auth/user-profile/')
 }
