@@ -1,0 +1,27 @@
+.form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.form label {
+  flex-basis: 100%;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.form input {
+  flex: 1 1 260px;
+}
+
+.form [role='alert'] {
+  flex-basis: 100%;
+}
+
+@media (max-width: 700px) {
+  .form input {
+    flex-basis: 100%;
+  }
+}

@@ -1,11 +1,13 @@
 import { useState } from 'react'
+import { Button } from '../../components/shared/Button'
 import { useAuth } from './AuthContext'
+import styles from './AccountSummary.module.css'
 
 /**
- * Minimal authenticated placeholder for Vertical Slice 1.
- *
- * Confirms the signed-in user's identity and provides logout. Couple
- * pairing and the real shared home replace this in a later unit.
+ * Identity + logout, meant to sit inside a page-level header (e.g. Couple
+ * Home) rather than stand alone — the "Welcome to Our Space" heading that
+ * used to live here moved to CoupleHomePage now that it owns the real
+ * greeting.
  */
 export function AccountSummary() {
   const { user, logout } = useAuth()
@@ -25,15 +27,14 @@ export function AccountSummary() {
   }
 
   return (
-    <section>
-      <h1>Welcome to Our Space</h1>
-      <p>
-        Signed in as <strong>{user.username}</strong>
-        {user.email && <> ({user.email})</>}
-      </p>
-      <button type="button" onClick={handleLogout} disabled={loggingOut}>
+    <div className={styles.summary}>
+      <span className={styles.identity}>
+        {user.username}
+        {user.email && ` (${user.email})`}
+      </span>
+      <Button variant="secondary" onClick={handleLogout} disabled={loggingOut}>
         {loggingOut ? 'Logging out…' : 'Log out'}
-      </button>
-    </section>
+      </Button>
+    </div>
   )
 }
