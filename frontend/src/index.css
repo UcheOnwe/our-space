@@ -1,22 +1,35 @@
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
+  /* Olive + dusty pink visual direction (Vertical Slice 3). Same token
+     names the app has used since scaffolding — only the values change,
+     so nothing that already reads these variables needed to be touched. */
+  --text: #4a4638;
+  --text-h: #2e2c28;
+  --bg: #faf7f2;
+  --border: #e6e0d4;
+  --code-bg: #f4f1e8;
+
+  --accent: #7a8450; /* olive — primary actions, focus rings */
+  --accent-hover: #66703f;
+  --accent-bg: rgba(122, 132, 80, 0.12);
+  --accent-border: rgba(122, 132, 80, 0.4);
+
+  --accent-secondary: #c98f8a; /* dusty pink — secondary accents, partner highlights */
+  --accent-secondary-bg: rgba(201, 143, 138, 0.16);
+
+  --danger: #b5533f;
+  --danger-bg: rgba(181, 83, 63, 0.1);
+  --success: #6f8f5b;
+
   --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+    rgba(46, 44, 40, 0.08) 0 4px 14px -2px, rgba(46, 44, 40, 0.05) 0 2px 6px -2px;
+  --radius: 10px;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
+  font: 16px/150% var(--sans);
+  letter-spacing: 0.1px;
   color-scheme: light dark;
   color: var(--text);
   background: var(--bg);
@@ -24,42 +37,40 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
+    --text: #d8d3c4;
+    --text-h: #f3efe4;
+    --bg: #201f1a;
+    --border: #3a382f;
+    --code-bg: #2a2921;
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
+    --accent: #a3af78;
+    --accent-hover: #b7c28f;
+    --accent-bg: rgba(163, 175, 120, 0.16);
+    --accent-border: rgba(163, 175, 120, 0.4);
+
+    --accent-secondary: #d9a8a0;
+    --accent-secondary-bg: rgba(217, 168, 160, 0.18);
+
+    --danger: #e0796a;
+    --danger-bg: rgba(224, 121, 106, 0.14);
+    --success: #9db98a;
+
+    --shadow:
+      rgba(0, 0, 0, 0.4) 0 4px 14px -2px, rgba(0, 0, 0, 0.25) 0 2px 6px -2px;
   }
 }
 
 #root {
-  width: 1126px;
-  max-width: 100%;
+  width: 100%;
+  max-width: 960px;
   margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
   min-height: 100svh;
-  display: flex;
-  flex-direction: column;
   box-sizing: border-box;
+  padding: 28px 20px 56px;
 }
 
 body {
@@ -69,43 +80,58 @@ body {
 h1,
 h2 {
   font-family: var(--heading);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-h);
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
+button {
+  font: inherit;
 }
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
+
+input,
+textarea {
+  font: inherit;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  box-sizing: border-box;
+  width: 100%;
 }
-p {
+
+input:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-h);
+  margin-bottom: 4px;
+}
+
+[role='alert'] {
+  color: var(--danger);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 14px;
   margin: 0;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
-
 code {
+  font-family: var(--mono);
   font-size: 15px;
   line-height: 135%;
   padding: 4px 8px;
+  border-radius: 4px;
   background: var(--code-bg);
+  color: var(--text-h);
 }
