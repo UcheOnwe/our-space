@@ -1,0 +1,63 @@
+.wrapper {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  width: 0;
+  height: 0;
+  z-index: 6;
+}
+
+.mote {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  opacity: 0;
+  animation: mote-scatter 500ms ease-out forwards;
+}
+
+.mote0 {
+  --tx: -18px;
+  --ty: -14px;
+  background: var(--accent);
+  animation-delay: 0ms;
+}
+
+.mote1 {
+  --tx: 16px;
+  --ty: -16px;
+  background: var(--accent-secondary);
+  animation-delay: 40ms;
+}
+
+.mote2 {
+  --tx: -20px;
+  --ty: 10px;
+  background: var(--accent);
+  animation-delay: 80ms;
+}
+
+.mote3 {
+  --tx: 18px;
+  --ty: 12px;
+  background: var(--accent-secondary);
+  animation-delay: 30ms;
+}
+
+.mote4 {
+  --tx: 0px;
+  --ty: -20px;
+  background: var(--accent);
+  animation-delay: 60ms;
+}
+
+@keyframes mote-scatter {
+  0% {
+    opacity: 0.8;
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--tx), var(--ty)) scale(0.4);
+  }
+}

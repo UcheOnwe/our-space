@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useCouple } from '../features/couples/CoupleContext'
+import { PresenceProvider } from '../features/presence/PresenceContext'
 import { WatchProvider } from '../features/watch/WatchContext'
 import { ChooseActionPage } from '../pages/ChooseActionPage'
 import { CoupleHomePage } from '../pages/CoupleHomePage'
@@ -28,15 +29,25 @@ export function CoupleGate() {
 
   if (status === 'paired') {
     if (pairedView === 'watch') {
-      // WatchProvider mounts only here, not app-wide like Auth/Couple —
-      // its state is only ever needed while this screen is open.
+      // Each screen gets its OWN PresenceProvider instance, scoped by
+      // `feature`. Mounting/unmounting one of these as the user navigates
+      // between screens is exactly what produces the sleeping/grayed-out
+      // "partner left this feature" behavior — see presence/consumers.py's
+      // (couple, feature) room scoping for why that stays correct even
+      // with two screens now sharing the same presence system.
       return (
         <WatchProvider>
-          <WatchTogetherPage onBack={() => setPairedView('home')} />
+          <PresenceProvider feature="watch">
+            <WatchTogetherPage onBack={() => setPairedView('home')} />
+          </PresenceProvider>
         </WatchProvider>
       )
     }
-    return <CoupleHomePage onOpenWatch={() => setPairedView('watch')} />
+    return (
+      <PresenceProvider feature="home">
+        <CoupleHomePage onOpenWatch={() => setPairedView('watch')} />
+      </PresenceProvider>
+    )
   }
 
   return view === 'choose' ? (

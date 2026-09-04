@@ -14,6 +14,14 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
+      // Same reasoning as /api above, extended to WebSockets: the browser
+      // connects to ws://localhost:5173/ws/presence/, and Vite tunnels it
+      // to the real Django/Daphne backend. `ws: true` tells Vite's proxy to
+      // handle the HTTP-Upgrade handshake, not just plain HTTP requests.
+      '/ws': {
+        target: 'ws://localhost:8000',
+        ws: true,
+      },
     },
   },
   test: {

@@ -17,13 +17,19 @@ services:
     build: .
     ports:
       - "8000:8000"
+    # Passes every variable in .env through to the container (DJANGO_*,
+    # FRONTEND_ORIGINS, POSTGRES_*, ...) — without this, editing .env has
+    # no effect on the running container at all, since .dockerignore
+    # excludes it from the image build too.
+    env_file:
+      - .env
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-our_space}
-      POSTGRES_USER: ${POSTGRES_USER:-our_space}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-our_space}
+      # Overrides .env's host-oriented values with the container-network
+      # equivalents: "db" is the Postgres service's name on the Docker
+      # network, reachable on its normal port 5432 — not the host-mapped
+      # "localhost:5433" used when running Django natively.
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
-  
     depends_on:
       - db
   
