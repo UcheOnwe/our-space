@@ -296,3 +296,116 @@ For any meaningful feature or vertical-slice implementation:
 - Mention the main files responsible at each step.
 - Do not create diagrams for trivial edits or individual bug fixes unless the flow changes.
 - Keep explanations concise and focused on helping the developer understand and explain the architecture.
+
+TECHNICAL EXPLANATION / LEARNING FORMAT
+
+When introducing any unfamiliar technology, dependency, framework, API, browser feature, infrastructure component, or important piece of project-owned code, explain it before or alongside implementation using a structured table.
+
+For each item, include:
+
+| Item | What it is | Where it comes from | Who owns/writes it | Why Our Space needs it | Small code example |
+|---|---|---|---|---|---|
+
+Use clear classifications such as:
+
+- External library/dependency
+- Framework
+- Browser API
+- Protocol
+- Infrastructure/tool
+- Configuration provided by a library
+- Our backend code
+- Our frontend code
+
+The goal is to help me understand the boundaries of the system.
+
+I need to be able to answer questions like:
+
+- Is this something we installed?
+- Is this built into the browser?
+- Is this an API?
+- Is this part of Django/React?
+- Is this code we created ourselves?
+- Why do we need it?
+- What does using it actually look like in code?
+- What part of Our Space is responsible for it?
+
+Keep explanations concise and practical rather than textbook-heavy.
+
+For unfamiliar concepts, prefer this mental model:
+
+What it is
+→ where it comes from
+→ why it exists
+→ how Our Space uses it
+→ small representative code snippet
+
+When several technologies work together, include a second table showing their relationship or data flow.
+
+Example:
+
+| Layer | Piece | Responsibility |
+|---|---|---|
+| Browser | WebSocket API | Opens the persistent connection |
+| Backend library | Django Channels | Adds WebSocket support to Django |
+| Our backend | PresenceConsumer | Defines Our Space realtime behavior |
+| Server | Daphne | Runs the ASGI Django application |
+| Our frontend | PresenceProvider | Manages realtime state in React |
+
+Do not assume that because a dependency is common, I already understand where it fits.
+
+Do not over-explain technologies I already understand unless something about their role has changed.
+
+ADDITIONAL ARCHITECTURE LEARNING RULE
+
+Whenever a new vertical slice introduces new technology, explicitly separate:
+
+1. Technology/capabilities we are USING
+2. Project code we are BUILDING with that technology
+
+Show this separation in a table before or alongside the implementation explanation.
+
+Example format:
+
+| Category | Piece | Source | Responsibility |
+|---|---|---|---|
+| Installed technology | Django Channels | External dependency | Adds realtime/WebSocket capabilities to Django |
+| Application server | Daphne | External dependency/tool | Runs the Django ASGI application |
+| Browser capability | WebSocket API | Built into the browser | Opens and maintains the realtime connection |
+| Library configuration | CHANNEL_LAYERS | Django Channels configuration | Configures how realtime messages are distributed |
+| Our backend code | PresenceConsumer | Written by us | Defines Our Space realtime connection/message behavior |
+| Our frontend code | PresenceProvider | Written by us | Manages realtime connection and presence state in React |
+| Our visual code | MouseSpirit component/SVG | Written by us | Draws the Mouse Spirit |
+| Our animation code | React state + CSS animation | Written by us | Controls movement, hug animation, hearts, and visual states |
+
+The important distinction is:
+
+TECHNOLOGY WE USE
+→ provides capabilities/building blocks
+
+CODE WE BUILD
+→ uses those capabilities to implement Our Space behavior
+
+For important code examples, explicitly identify which names come from an external library/browser API and which names were created by us.
+
+Example:
+
+from channels.generic.websocket import AsyncJsonWebsocketConsumer
+
+class PresenceConsumer(AsyncJsonWebsocketConsumer):
+    ...
+
+Explain:
+- AsyncJsonWebsocketConsumer → provided by Django Channels
+- PresenceConsumer → class created by us for Our Space
+
+Frontend example:
+
+const socket = new WebSocket("/ws/presence/");
+
+Explain:
+- WebSocket → browser-provided API
+- socket → variable created by us
+- /ws/presence/ → Our Space WebSocket route created by us
+
+The purpose is to make the ownership and boundaries of the architecture obvious, not merely explain what the code does.

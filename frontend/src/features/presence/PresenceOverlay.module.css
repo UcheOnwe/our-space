@@ -1,0 +1,111 @@
+.container {
+  position: relative;
+  /* Guarantees the presence area covers at least the full viewport even
+     when Couple Home's content is short (e.g. a phone with just the
+     greeting + one card) — without capping it, so content taller than the
+     viewport still grows this box further, same as any normal element.
+     `svh` (small viewport height) matches the unit #root already uses in
+     index.css and, unlike plain `vh`, isn't taller than what's actually
+     visible on iOS Safari when its address bar is showing. */
+  min-height: 100svh;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  /* The default for the whole layer: invisible to clicks, so cards,
+     buttons, and links underneath keep receiving normal interaction.
+     Individual children opt back in with their own pointer-events: auto —
+     see .avatarButton below. */
+  pointer-events: none;
+}
+
+.avatar,
+.avatarButton {
+  position: absolute;
+  width: 56px;
+  height: 56px;
+  transform: translate(-50%, -50%);
+  /* No transition on left/top here: the local avatar tracks input 1:1, and
+     the partner avatar is already smoothed frame-by-frame in
+     PresenceOverlay's interpolation loop — a transition on top of that
+     would double up and make it feel laggy instead of smooth. Opacity/
+     filter/transform (for the video dissolve, below) DO always transition —
+     that's a separate concern from position and never conflicts with it. */
+  transition:
+    opacity 0.4s ease,
+    filter 0.4s ease,
+    transform 0.4s ease;
+}
+
+.avatarButton {
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  /* The one interactive hole punched through .layer's pointer-events: none
+     — this is what keeps the partner's avatar clickable for Hug. */
+  pointer-events: auto;
+}
+
+/* Applied only while a Hug is converging/releasing (see PresenceOverlay.tsx's
+   hugTransitioning state) — everywhere else .avatar/.avatarButton have no
+   left/top transition at all, so normal cursor/tap tracking stays instant. */
+.positionTransition {
+  transition:
+    left 0.4s ease,
+    top 0.4s ease,
+    opacity 0.4s ease,
+    filter 0.4s ease,
+    transform 0.4s ease;
+}
+
+/* The video-hidden / hovering-the-player dissolve — NOT the sleeping/
+   offline treatment (see .offline in MouseSpirit.module.css), which stays
+   completely separate. transform overrides the base translate(-50%,-50%)
+   centering, so it's repeated here rather than just adding a scale. */
+.avatarDissolved {
+  opacity: 0;
+  filter: blur(3px);
+  transform: translate(-50%, -50%) scale(0.55);
+}
+
+.locationLabel {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.connectionNotice {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  opacity: 0.85;
+}
+
+@media (max-width: 700px) {
+  .avatar,
+  .avatarButton {
+    width: 46px;
+    height: 46px;
+  }
+}

@@ -1,0 +1,92 @@
+.mouse {
+  width: 100%;
+  height: 100%;
+  overflow: visible; /* the arm can swing slightly outside the 0-100 viewBox during a hug */
+}
+
+.variantA {
+  --mouse-accent: var(--accent);
+}
+
+.variantB {
+  --mouse-accent: var(--accent-secondary);
+}
+
+.online {
+  filter: none;
+  transition: filter 0.5s ease;
+}
+
+.offline {
+  /* "Clearly indicate offline, don't look actively connected" — desaturated
+     and dimmed, not just a color swap that could be missed at small sizes. */
+  filter: grayscale(0.65) opacity(0.5);
+  transition: filter 0.5s ease;
+}
+
+.body,
+.face,
+.tail {
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.body ellipse:first-of-type {
+  fill: #fbf6ec;
+  stroke: var(--mouse-accent);
+  stroke-width: 2;
+}
+
+.ear {
+  fill: var(--mouse-accent);
+}
+
+.eye {
+  fill: #2e2c28;
+}
+
+.eyeClosed {
+  stroke: #2e2c28;
+}
+
+.nose,
+.cheek {
+  fill: var(--mouse-accent);
+}
+
+.cheek {
+  opacity: 0.35;
+}
+
+.tail path {
+  stroke: var(--mouse-accent);
+}
+
+.arm {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.arm ellipse {
+  fill: var(--mouse-accent);
+}
+
+/* Hug pose: the whole avatar leans toward the partner and the arm swings
+   up and across, as if reaching around them. Removing these classes (when
+   the interaction ends) is what makes the "return to normal" smooth — it's
+   the same transition running in reverse, not a separate animation. */
+.hugging.leanRight .body,
+.hugging.leanRight .face,
+.hugging.leanRight .tail {
+  transform: translateX(9px);
+}
+
+.hugging.leanLeft .body,
+.hugging.leanLeft .face,
+.hugging.leanLeft .tail {
+  transform: translateX(-9px);
+}
+
+.hugging .arm {
+  transform: rotate(-110deg) translate(3px, -4px);
+}

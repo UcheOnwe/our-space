@@ -2,6 +2,8 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthProvider } from '../../auth/AuthContext'
 import { CoupleProvider } from '../../couples/CoupleContext'
+import { PresenceProvider } from '../../presence/PresenceContext'
+import { FakeWebSocket } from '../../presence/__tests__/fakeWebSocket'
 import { WatchProvider } from '../WatchContext'
 import { WatchTogetherScreen } from '../WatchTogetherScreen'
 
@@ -11,6 +13,8 @@ function jsonResponse(status: number, body: unknown): Response {
 
 beforeEach(() => {
   vi.restoreAllMocks()
+  FakeWebSocket.instances.length = 0
+  vi.stubGlobal('WebSocket', FakeWebSocket)
   // WatchTogetherScreen renders PartnerBadge, which reads auth + couple
   // context — in the real app it's always nested inside both (via
   // CoupleGate), so the test mirrors that nesting rather than mocking it away.
@@ -54,7 +58,9 @@ describe('WatchTogetherScreen', () => {
       <AuthProvider>
         <CoupleProvider>
           <WatchProvider>
-            <WatchTogetherScreen />
+            <PresenceProvider feature="watch">
+              <WatchTogetherScreen />
+            </PresenceProvider>
           </WatchProvider>
         </CoupleProvider>
       </AuthProvider>,

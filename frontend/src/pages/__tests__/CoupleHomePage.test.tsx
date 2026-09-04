@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthProvider } from '../../features/auth/AuthContext'
 import { CoupleProvider } from '../../features/couples/CoupleContext'
+import { PresenceProvider } from '../../features/presence/PresenceContext'
+import { FakeWebSocket } from '../../features/presence/__tests__/fakeWebSocket'
 import { CoupleHomePage } from '../CoupleHomePage'
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -11,6 +13,8 @@ function jsonResponse(status: number, body: unknown): Response {
 
 beforeEach(() => {
   vi.restoreAllMocks()
+  FakeWebSocket.instances.length = 0
+  vi.stubGlobal('WebSocket', FakeWebSocket)
   vi.stubGlobal(
     'fetch',
     vi.fn((input: RequestInfo | URL) => {
@@ -46,7 +50,9 @@ describe('CoupleHomePage', () => {
     render(
       <AuthProvider>
         <CoupleProvider>
-          <CoupleHomePage onOpenWatch={onOpenWatch} />
+          <PresenceProvider feature="home">
+            <CoupleHomePage onOpenWatch={onOpenWatch} />
+          </PresenceProvider>
         </CoupleProvider>
       </AuthProvider>,
     )

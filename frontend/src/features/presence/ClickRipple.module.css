@@ -1,0 +1,24 @@
+.ripple {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  transform: translate(-50%, -50%) scale(0.3);
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  pointer-events: none;
+  /* Duration must match RIPPLE_DURATION_MS in PresenceContext.tsx — that's
+     what actually removes this element once the animation finishes. */
+  animation: ripple-pulse 550ms ease-out forwards;
+}
+
+@keyframes ripple-pulse {
+  0% {
+    opacity: 0.6;
+    transform: translate(-50%, -50%) scale(0.3);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(2.4);
+  }
+}

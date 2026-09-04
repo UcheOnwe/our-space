@@ -19,6 +19,11 @@
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.45);
+  /* Above PresenceOverlay's .layer (z-index: 5) so a wandering avatar can
+     never visually sit on top of this control during the brief pre-dissolve
+     window — the click already reaches it either way (.layer is
+     pointer-events: none), but it must never look obscured. */
+  z-index: 6;
 }
 
 .emptyState {

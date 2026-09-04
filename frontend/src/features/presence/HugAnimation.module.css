@@ -1,0 +1,47 @@
+.wrapper {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  width: 0;
+  height: 0;
+  z-index: 5;
+}
+
+.heart {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  color: var(--accent-secondary);
+  opacity: 0;
+  animation: float-up 1.4s ease-out forwards;
+}
+
+.heart0 {
+  left: -16px;
+  animation-delay: 0ms;
+}
+
+.heart1 {
+  left: -6px;
+  animation-delay: 180ms;
+}
+
+.heart2 {
+  left: 4px;
+  animation-delay: 360ms;
+}
+
+@keyframes float-up {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.6);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(-6px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-46px) scale(0.9);
+  }
+}
