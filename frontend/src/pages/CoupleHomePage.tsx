@@ -1,9 +1,9 @@
 import { Button } from '../components/shared/Button'
-import { Card } from '../components/shared/Card'
 import { AccountSummary } from '../features/auth/AccountSummary'
 import { useAuth } from '../features/auth/AuthContext'
 import { useCouple } from '../features/couples/CoupleContext'
 import { PresenceOverlay } from '../features/presence/PresenceOverlay'
+import { RoomCanvas } from '../features/room/RoomCanvas'
 import styles from './CoupleHomePage.module.css'
 
 export function CoupleHomePage({ onOpenWatch }: { onOpenWatch: () => void }) {
@@ -16,7 +16,10 @@ export function CoupleHomePage({ onOpenWatch }: { onOpenWatch: () => void }) {
     // its own section — Shared Presence V1's correction: the entire page is
     // the shared area, not a separate boxed room. PresenceProvider itself
     // is still mounted by CoupleGate, not here — see CoupleGate.tsx.
-    <PresenceOverlay>
+    // `fullBleed` matches Couple Home's own full-viewport-width layout
+    // below (see CoupleHomePage.module.css's `.page`) — see
+    // PresenceOverlay.tsx's prop doc for why that has to be explicit.
+    <PresenceOverlay fullBleed>
       <div className={styles.page}>
         <header className={styles.header}>
           <span className={styles.wordmark}>Our Space</span>
@@ -25,18 +28,18 @@ export function CoupleHomePage({ onOpenWatch }: { onOpenWatch: () => void }) {
 
         <div className={styles.intro}>
           <h1>Welcome back{partner ? `, and ${partner.username}` : ''}.</h1>
-          <p>What do you want to do together?</p>
+          <p>Your shared room.</p>
         </div>
 
-        {/* Only one real card for now — no disabled placeholders for future
-            activities. The grid is ready to hold more without a redesign. */}
-        <div className={styles.grid}>
-          <Card className={styles.activityCard}>
-            <h2>Watch Together</h2>
-            <p>Start a shared YouTube session.</p>
-            <Button onClick={onOpenWatch}>Start Watching</Button>
-          </Card>
-        </div>
+        <RoomCanvas onOpenWatch={onOpenWatch} />
+
+        {/* The room's TV is now the graphical entry point to Watch Together
+            (see RoomCanvas's onOpenWatch prop) — this button is the
+            required accessible fallback path, invoking the exact same
+            onOpenWatch callback rather than a second implementation. */}
+        <Button onClick={onOpenWatch} className={styles.watchTogetherButton}>
+          Start Watching
+        </Button>
       </div>
     </PresenceOverlay>
   )

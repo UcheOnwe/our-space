@@ -41,6 +41,17 @@ interface PresenceOverlayProps {
    * only once a video has been loaded.
    */
   suppressZoneElement?: HTMLElement | null
+  /**
+   * Set by callers whose own content already breaks out of #root's normal
+   * 960px width (index.css) — currently just Couple Home. Widens this
+   * component's own bounding box to match via the identical negative-
+   * margin trick (see PresenceOverlay.module.css's `.fullBleed`), which is
+   * what `normalizedFromClient` below measures to turn a pointer position
+   * into a 0-1 presence coordinate. Omit (the default) for a normal-width
+   * page like Watch Together, where this box should stay exactly as wide
+   * as the content it's presented over.
+   */
+  fullBleed?: boolean
 }
 
 /**
@@ -54,7 +65,7 @@ interface PresenceOverlayProps {
  * mouse and touch, so no manual distance/threshold tracking is needed to
  * tell a scroll from a tap.
  */
-export function PresenceOverlay({ children, suppressZoneElement }: PresenceOverlayProps) {
+export function PresenceOverlay({ children, suppressZoneElement, fullBleed }: PresenceOverlayProps) {
   const {
     connectionStatus,
     selfAvatar,
@@ -309,8 +320,10 @@ export function PresenceOverlay({ children, suppressZoneElement }: PresenceOverl
   const showLocationLabel = partner != null && !partner.online && partner.currentFeature != null
   const locationLabelText = partner?.currentFeature ? FEATURE_LABELS[partner.currentFeature] : null
 
+  const containerClassName = [styles.container, fullBleed ? styles.fullBleed : ''].filter(Boolean).join(' ')
+
   return (
-    <div ref={containerRef} className={styles.container} onClick={handleClick}>
+    <div ref={containerRef} className={containerClassName} onClick={handleClick}>
       {children}
 
       {/* pointer-events: none by default — see PresenceOverlay.module.css.

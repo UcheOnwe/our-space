@@ -1,7 +1,19 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 10px;
+  /* Couple Home is the one page meant to feel room-first/immersive, not a
+     small dashboard card — everywhere else keeps #root's normal 960px
+     reading width (index.css). The actual full-viewport breakout now
+     lives one level up, on PresenceOverlay's own `.container` (see its
+     `fullBleed` prop) — that's the element `normalizedFromClient` measures
+     for Mouse Spirit's coordinate space, so it has to be the one that's
+     actually full-width, not just this page's own content. `.page` here
+     is a plain 100%-of-its-now-full-width-parent block; it only needs its
+     own padding back, since #root's 20px side padding (index.css) no
+     longer reaches content that's positioned outside #root's own box. */
+  padding: 0 clamp(8px, 1.5vw, 24px) 10px;
+  box-sizing: border-box;
 }
 
 .header {
@@ -10,44 +22,30 @@
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
+  /* Deliberately compact — the header's job is just account/logout
+     access, not competing with the room for vertical space. */
+  padding-top: 8px;
 }
 
 .wordmark {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--accent);
 }
 
 .intro h1 {
-  margin: 0 0 6px;
-  font-size: 28px;
+  margin: 0 0 2px;
+  font-size: 20px;
 }
 
 .intro p {
   margin: 0;
   color: var(--text);
+  font-size: 14px;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 20px;
-}
-
-.activityCard {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.activityCard h2 {
-  margin: 0;
-  font-size: 19px;
-}
-
-.activityCard p {
-  margin: 0 0 6px;
-  color: var(--text);
+.watchTogetherButton {
+  align-self: flex-start;
 }
 
 @media (max-width: 700px) {
