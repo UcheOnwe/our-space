@@ -1,0 +1,55 @@
+.wrapper {
+  position: relative;
+  width: 100%;
+  /* Viewport-relative rather than aspect-ratio-locked to the room's own
+     16:9 shape — locking it that way would make the wrapper itself shrink
+     to match the world on a narrow phone, leaving nothing for the camera's
+     min-scale/pan behavior (camera.ts) to actually do. Letting the wrapper
+     take a generous, independent chunk of the screen — a fixed vh slice
+     of a TALLER-than-16:9 box — is what makes panning meaningful on
+     mobile: computeCameraFrame's contain-fit math only ever needs to pan
+     when the box it's given doesn't already match the world's own aspect
+     ratio (see the desktop override below, which deliberately does match
+     it, so the exact same camera.ts math naturally stops panning there —
+     no separate desktop/mobile code path needed). These mobile numbers
+     are untouched by the desktop override below. */
+  height: 62vh;
+  min-height: 320px;
+  max-height: 640px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  /* Our own pan-drag (see RoomCanvas.tsx) owns touch gestures inside the
+     room — without this, the browser would also try to scroll the page
+     underneath a drag, the same class of conflict already solved for
+     Mouse Spirit's mobile behavior. */
+  touch-action: none;
+  background: var(--border);
+}
+
+/* Desktop: the room IS the page, not a card scaled to fit inside one
+   screen. Sized by WIDTH only (paired with CoupleHomePage.module.css's
+   near-full-viewport page width) — height is a pure CSS consequence of
+   `aspect-ratio` matching the world's own 1600x900 shape exactly, not a
+   vh guess. That match is what turns camera.ts's general contain-fit
+   calculation into an effective "fill" — the scaled world always equals
+   the box exactly on both axes, so maxPanX/maxPanY come out to 0 without
+   camera.ts needing a separate desktop code path. The resulting height
+   naturally follows the room's own size, which on a typical desktop
+   window is close to or beyond one viewport height — normal page scroll
+   reveals the rest instead of the room shrinking to avoid it, which is
+   the explicit point of this layout, not a side effect to correct. No
+   border-radius here either — a rounded, boxed corner is exactly the
+   "dashboard card" look this is meant to move away from. */
+@media (min-width: 701px) {
+  .wrapper {
+    height: auto;
+    aspect-ratio: 1600 / 900;
+    min-height: 0;
+    max-height: none;
+    border-radius: 0;
+  }
+}
+
+.wrapper canvas {
+  display: block;
+}

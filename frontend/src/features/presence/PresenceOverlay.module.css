@@ -10,6 +10,27 @@
   min-height: 100svh;
 }
 
+/* Opt-in full-bleed breakout — see PresenceOverlay.tsx's `fullBleed` prop.
+   Couple Home's own content (RoomCanvas + CoupleHomePage.module.css's
+   `.page`) already spans the full viewport width via this identical
+   negative-margin trick, escaping #root's normal 960px cap (index.css).
+   Without this class, `.container` — a plain block child of #root — stays
+   sized to that narrower ~960px box regardless of what its own children
+   visually paint outside it, so `normalizedFromClient`'s
+   `getBoundingClientRect()` in PresenceOverlay.tsx silently maps Mouse
+   Spirit's 0-1 coordinates onto a box narrower than the page it's actually
+   presented over — the avatar visually can't reach the far left/right
+   edges the room itself already reaches. Deliberately opt-in, not the
+   .container default: WatchTogetherScreen also renders through
+   PresenceOverlay and intentionally keeps the normal capped width, where
+   this same trick would incorrectly widen its own presence bounds past
+   its actually-visible content. */
+.fullBleed {
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+}
+
 .layer {
   position: absolute;
   inset: 0;
