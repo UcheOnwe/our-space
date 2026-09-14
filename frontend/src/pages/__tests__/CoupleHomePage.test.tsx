@@ -51,7 +51,7 @@ describe('CoupleHomePage', () => {
       <AuthProvider>
         <CoupleProvider>
           <PresenceProvider feature="home">
-            <CoupleHomePage onOpenWatch={onOpenWatch} />
+            <CoupleHomePage onOpenWatch={onOpenWatch} onOpenCompanion={vi.fn()} />
           </PresenceProvider>
         </CoupleProvider>
       </AuthProvider>,
@@ -70,5 +70,28 @@ describe('CoupleHomePage', () => {
     expect(onOpenWatch).toHaveBeenCalledOnce()
     // Selecting it closes the drawer again.
     expect(screen.queryByRole('button', { name: 'Watch Together' })).not.toBeInTheDocument()
+  })
+
+  it('exposes a working entry into the Space Companion setup page through the same left menu', async () => {
+    const onOpenCompanion = vi.fn()
+    const user = userEvent.setup()
+
+    render(
+      <AuthProvider>
+        <CoupleProvider>
+          <PresenceProvider feature="home">
+            <CoupleHomePage onOpenWatch={vi.fn()} onOpenCompanion={onOpenCompanion} />
+          </PresenceProvider>
+        </CoupleProvider>
+      </AuthProvider>,
+    )
+
+    const menuToggle = await screen.findByRole('button', { name: 'Open menu' })
+    await user.click(menuToggle)
+
+    const companionItem = await screen.findByRole('button', { name: 'Space Companion' })
+    await user.click(companionItem)
+
+    expect(onOpenCompanion).toHaveBeenCalledOnce()
   })
 })
