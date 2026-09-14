@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Our Space Companion (Dev Build)",
+  "version": "0.1.0",
+  "description": "Adds an Our Space Companion overlay to YouTube. Proof-of-concept development build — not published to the Chrome Web Store.",
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["content-script.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

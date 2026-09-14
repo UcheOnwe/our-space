@@ -7,6 +7,12 @@ interface CoupleHomeSidebarProps {
    * and CoupleHomePage passes straight through here, so this menu item
    * and the TV invoke one shared navigation path, never a second one. */
   onOpenWatch: () => void
+  /** Opens the Space Companion setup page (CompanionSetupPage) — the
+   * Companion extension POC's own entry point. Same "just another
+   * pairedView" navigation approach as onOpenWatch (see CoupleGate.tsx);
+   * this app has no URL router, so this is that convention's second use,
+   * not a new one. */
+  onOpenCompanion: () => void
 }
 
 /**
@@ -24,7 +30,7 @@ interface CoupleHomeSidebarProps {
  * slice can add Music/Games/Move-Fitness/Memories/Settings as more list
  * items without restructuring this component.
  */
-export function CoupleHomeSidebar({ onOpenWatch }: CoupleHomeSidebarProps) {
+export function CoupleHomeSidebar({ onOpenWatch, onOpenCompanion }: CoupleHomeSidebarProps) {
   const [isOpen, setIsOpen] = useState(false)
   const drawerId = useId()
 
@@ -45,6 +51,11 @@ export function CoupleHomeSidebar({ onOpenWatch }: CoupleHomeSidebarProps) {
     // closing the drawer afterward is this menu's own UI housekeeping,
     // not part of that shared navigation action.
     onOpenWatch()
+    setIsOpen(false)
+  }
+
+  function handleCompanion() {
+    onOpenCompanion()
     setIsOpen(false)
   }
 
@@ -88,6 +99,11 @@ export function CoupleHomeSidebar({ onOpenWatch }: CoupleHomeSidebarProps) {
           <li>
             <button type="button" className={styles.menuItem} onClick={handleWatchTogether}>
               Watch Together
+            </button>
+          </li>
+          <li>
+            <button type="button" className={styles.menuItem} onClick={handleCompanion}>
+              Space Companion
             </button>
           </li>
         </ul>

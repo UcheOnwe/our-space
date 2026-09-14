@@ -1,0 +1,207 @@
+/* Our Space Companion — content-script styles.
+   Injected as a <style> tag INSIDE our own Shadow DOM (see
+   companionView.ts's `createCompanionView`) rather than through
+   manifest.json's `content_scripts.css`, which would inject into
+   YouTube's own document instead of our shadow root and defeat the whole
+   point of the isolation.
+
+   These color values intentionally DUPLICATE Our Space's web app palette
+   (frontend/src/index.css) rather than sharing it at runtime — this
+   stylesheet runs inside a completely different document (youtube.com)
+   that never loads the web app's CSS. */
+
+:host {
+  --our-space-accent: #7a8450;
+  --our-space-accent-secondary: #c98f8a;
+  --our-space-cream: #faf7f2;
+  --our-space-ink: #2e2c28;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.our-space-overlay {
+  position: fixed;
+  inset: 0;
+  /* Maximum safe z-index — stays above every YouTube layer without this
+     needing to know or track YouTube's own stacking scheme. */
+  z-index: 2147483647;
+  /* The overlay itself must NEVER block a click meant for YouTube; only
+     the specific interactive children below opt back in. */
+  pointer-events: none;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+}
+
+/* ---------------------------------------------------------------------
+   Space Companion
+   --------------------------------------------------------------------- */
+
+.our-space-companion {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 56px;
+  height: 56px;
+  pointer-events: auto;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 0;
+  will-change: transform; /* contentScriptEntry.ts writes `transform` every animation frame */
+}
+
+/* The "keyboard control belongs to it" indicator the approved plan asks
+   for — a soft glowing ring, shown while Companion Control Mode is active
+   (see companionControlMode.ts) OR while the companion merely has native
+   keyboard focus (Tab landed on it, before any click). */
+.our-space-companion-ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 3px var(--our-space-accent-secondary),
+    0 0 16px 4px rgba(201, 143, 138, 0.55);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.our-space-companion:focus-visible .our-space-companion-ring,
+.our-space-companion--control-active .our-space-companion-ring {
+  opacity: 1;
+}
+
+.our-space-companion-flip {
+  width: 100%;
+  height: 100%;
+  /* Smooths the left/right facing flip into a quick ease instead of an
+     instant mirror-snap. */
+  transition: transform 0.12s ease;
+}
+
+.our-space-companion-bob {
+  width: 100%;
+  height: 100%;
+  animation: our-space-companion-float 2.6s ease-in-out infinite;
+}
+
+/* Swaps to a snappier bounce while a direction key is actually held —
+   the "slight squash/stretch or motion response" the approved plan asks
+   for, without a second animation system. */
+.our-space-companion--moving .our-space-companion-bob {
+  animation-name: our-space-companion-bounce;
+  animation-duration: 0.5s;
+}
+
+@keyframes our-space-companion-float {
+  0%,
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  50% {
+    transform: translateY(-4px) scale(1.03, 0.97);
+  }
+}
+
+@keyframes our-space-companion-bounce {
+  0%,
+  100% {
+    transform: translateY(0) scale(0.97, 1.04);
+  }
+  50% {
+    transform: translateY(-3px) scale(1.05, 0.95);
+  }
+}
+
+.our-space-companion-eye {
+  animation: our-space-companion-blink 6s ease-in-out infinite;
+  transform-origin: center;
+}
+
+/* Both eyes blink together but not frame-identically — reads slightly
+   less mechanical than a perfectly synced blink. */
+.our-space-companion-eye--right {
+  animation-delay: 0.05s;
+}
+
+@keyframes our-space-companion-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  96% {
+    transform: scaleY(0.1);
+  }
+}
+
+/* Focus Mode hides the companion entirely — never YouTube's own UI, only
+   this element, which lives inside our own shadow root (see
+   focusMode.ts). */
+.our-space-companion--focus-hidden {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------
+   Focus Mode toggle
+   --------------------------------------------------------------------- */
+
+.our-space-focus-toggle {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(122, 132, 80, 0.35);
+  border-radius: 999px;
+  background: var(--our-space-cream);
+  color: var(--our-space-ink);
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 4px 14px -2px rgba(46, 44, 40, 0.18);
+  cursor: pointer;
+  transition:
+    opacity 0.2s ease,
+    padding 0.2s ease;
+}
+
+.our-space-focus-toggle:hover {
+  border-color: var(--our-space-accent);
+}
+
+/* Focus Mode ON: shrink to the "very small unobtrusive restore control"
+   the approved plan asks for, rather than swapping to a second element —
+   one element with two visual states is the smaller, more maintainable
+   implementation. */
+.our-space-focus-toggle--focused {
+  padding: 8px;
+  opacity: 0.55;
+}
+
+.our-space-focus-toggle--focused:hover {
+  opacity: 1;
+}
+
+.our-space-focus-toggle--focused .our-space-focus-toggle-label {
+  display: none;
+}
+
+.our-space-focus-toggle-label {
+  white-space: nowrap;
+}
+
+.our-space-focus-toggle-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--our-space-accent-secondary);
+  flex-shrink: 0;
+}

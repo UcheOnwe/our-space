@@ -3,6 +3,7 @@ import { useCouple } from '../features/couples/CoupleContext'
 import { PresenceProvider } from '../features/presence/PresenceContext'
 import { WatchProvider } from '../features/watch/WatchContext'
 import { ChooseActionPage } from '../pages/ChooseActionPage'
+import { CompanionSetupPage } from '../pages/CompanionSetupPage'
 import { CoupleHomePage } from '../pages/CoupleHomePage'
 import { InviteWaitingPage } from '../pages/InviteWaitingPage'
 import { JoinSpacePage } from '../pages/JoinSpacePage'
@@ -17,7 +18,7 @@ import { WatchTogetherPage } from '../pages/WatchTogetherPage'
 export function CoupleGate() {
   const { status } = useCouple()
   const [view, setView] = useState<'choose' | 'join'>('choose')
-  const [pairedView, setPairedView] = useState<'home' | 'watch'>('home')
+  const [pairedView, setPairedView] = useState<'home' | 'watch' | 'companion'>('home')
 
   if (status === 'loading') {
     return <p>Loading…</p>
@@ -43,9 +44,16 @@ export function CoupleGate() {
         </WatchProvider>
       )
     }
+    if (pairedView === 'companion') {
+      // No PresenceProvider here — the Companion setup page is static,
+      // informational content with no realtime/shared state of its own
+      // (the POC's whole overlay lives entirely inside the browser
+      // extension, with no backend/presence involvement at all).
+      return <CompanionSetupPage onBack={() => setPairedView('home')} />
+    }
     return (
       <PresenceProvider feature="home">
-        <CoupleHomePage onOpenWatch={() => setPairedView('watch')} />
+        <CoupleHomePage onOpenWatch={() => setPairedView('watch')} onOpenCompanion={() => setPairedView('companion')} />
       </PresenceProvider>
     )
   }

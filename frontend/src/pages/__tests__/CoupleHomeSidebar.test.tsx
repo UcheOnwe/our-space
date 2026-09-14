@@ -5,7 +5,7 @@ import { CoupleHomeSidebar } from '../CoupleHomeSidebar'
 
 describe('CoupleHomeSidebar', () => {
   it('starts closed with an accessible, collapsed menu toggle', () => {
-    render(<CoupleHomeSidebar onOpenWatch={vi.fn()} />)
+    render(<CoupleHomeSidebar onOpenWatch={vi.fn()} onOpenCompanion={vi.fn()} />)
 
     const toggle = screen.getByRole('button', { name: 'Open menu' })
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
@@ -18,7 +18,7 @@ describe('CoupleHomeSidebar', () => {
 
   it('opens the drawer and exposes "Watch Together" when the hamburger is clicked', async () => {
     const user = userEvent.setup()
-    render(<CoupleHomeSidebar onOpenWatch={vi.fn()} />)
+    render(<CoupleHomeSidebar onOpenWatch={vi.fn()} onOpenCompanion={vi.fn()} />)
 
     await user.click(screen.getByRole('button', { name: 'Open menu' }))
 
@@ -29,7 +29,7 @@ describe('CoupleHomeSidebar', () => {
   it('invokes onOpenWatch and closes itself when "Watch Together" is selected', async () => {
     const onOpenWatch = vi.fn()
     const user = userEvent.setup()
-    render(<CoupleHomeSidebar onOpenWatch={onOpenWatch} />)
+    render(<CoupleHomeSidebar onOpenWatch={onOpenWatch} onOpenCompanion={vi.fn()} />)
 
     await user.click(screen.getByRole('button', { name: 'Open menu' }))
     await user.click(screen.getByRole('button', { name: 'Watch Together' }))
@@ -39,9 +39,22 @@ describe('CoupleHomeSidebar', () => {
     expect(screen.queryByRole('button', { name: 'Watch Together' })).not.toBeInTheDocument()
   })
 
+  it('invokes onOpenCompanion and closes itself when "Space Companion" is selected', async () => {
+    const onOpenCompanion = vi.fn()
+    const user = userEvent.setup()
+    render(<CoupleHomeSidebar onOpenWatch={vi.fn()} onOpenCompanion={onOpenCompanion} />)
+
+    await user.click(screen.getByRole('button', { name: 'Open menu' }))
+    await user.click(screen.getByRole('button', { name: 'Space Companion' }))
+
+    expect(onOpenCompanion).toHaveBeenCalledOnce()
+    expect(screen.getByRole('button', { name: 'Open menu' })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('button', { name: 'Space Companion' })).not.toBeInTheDocument()
+  })
+
   it('closes when Escape is pressed', async () => {
     const user = userEvent.setup()
-    render(<CoupleHomeSidebar onOpenWatch={vi.fn()} />)
+    render(<CoupleHomeSidebar onOpenWatch={vi.fn()} onOpenCompanion={vi.fn()} />)
 
     await user.click(screen.getByRole('button', { name: 'Open menu' }))
     expect(screen.getByRole('button', { name: 'Watch Together' })).toBeInTheDocument()
