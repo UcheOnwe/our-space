@@ -21,6 +21,10 @@ import type { AvatarActivity, AvatarActivityKind, RandomSource } from './avatarA
  * already is, and with a seeded/mock RandomSource (see avatarActivities.ts)
  * its exact sequence of choices is fully reproducible in a test rather than
  * flaky.
+ *
+ * `pause`/`resume` let CoupleHugCoordinator.ts borrow this avatar for the
+ * couple-hug interaction without this director fighting it for control —
+ * see those methods' own doc comments.
  */
 export class AvatarAutonomyDirector {
   private readonly motion: AvatarMotionController
@@ -39,6 +43,9 @@ export class AvatarAutonomyDirector {
    * duration is; the wait/choose logic in `update` only ever fires once
    * this reaches zero. */
   private waitSecondsRemaining: number
+  /** Set by CoupleHugCoordinator.ts while it has taken this avatar over
+   * for a hug — see `pause`/`resume`. */
+  private paused = false
 
   constructor(motion: AvatarMotionController, random: RandomSource = Math.random) {
     this.motion = motion
@@ -58,12 +65,45 @@ export class AvatarAutonomyDirector {
     return this.pendingActivity?.kind ?? null
   }
 
+  isPaused(): boolean {
+    return this.paused
+  }
+
+  /**
+   * Hands this avatar's motion over to an external coordinator —
+   * CoupleHugCoordinator.ts, for the couple-hug interaction — without
+   * losing any in-progress countdown. While paused, `update()` still
+   * advances the underlying motion controller every tick (so a walk the
+   * coordinator started with its own direct `moveTo` call keeps animating
+   * normally), it just stops making its OWN idle/activity decisions —
+   * the coordinator drives `moveTo`/`sitAt`/etc. directly instead. This is
+   * deliberately simpler than teaching this director about hug as another
+   * activity kind: pausing it is the whole coordination contract (see
+   * CoupleHugCoordinator.ts's own doc comment for why hug is a separate
+   * system rather than a fourth AvatarActivityKind).
+   */
+  pause(): void {
+    this.paused = true
+  }
+
+  /** Hands this avatar back to its own autonomy, starting a fresh idle
+   * wait — never resumes mid-countdown from whatever was left before
+   * `pause()`, so an avatar never immediately re-picks an activity the
+   * instant a hug ends; it gets a normal idle beat first, same as
+   * standing up from any other activity. */
+  resume(): void {
+    this.paused = false
+    this.pendingActivity = null
+    this.waitSecondsRemaining = pickIdleDuration(this.random)
+  }
+
   /** Advances the underlying motion controller, then applies exactly one
    * behavior decision if one is due this tick — never more than one, so a
    * very large `deltaSeconds` (e.g. a slow frame) can't cascade through
    * several activities at once. Call once per ticker tick, per avatar. */
   update(deltaSeconds: number): void {
     this.motion.update(deltaSeconds)
+    if (this.paused) return
     const state = this.motion.getState()
 
     // Still mid-walk toward whatever `pendingActivity` (or nothing, for a
@@ -78,11 +118,12 @@ export class AvatarAutonomyDirector {
       this.pendingActivity = null
       this.lastActivityKind = activity.kind
 
+      const poseOptions = { scaleMultiplier: activity.poseScaleMultiplier, rotation: activity.poseRotation }
       if (activity.arrivalState === 'sitting' && activity.posePosition) {
-        this.motion.sitAt(activity.posePosition)
+        this.motion.sitAt(activity.posePosition, poseOptions)
         this.waitSecondsRemaining = pickSitDuration(this.random)
       } else if (activity.arrivalState === 'lying' && activity.posePosition) {
-        this.motion.lieAt(activity.posePosition)
+        this.motion.lieAt(activity.posePosition, poseOptions)
         this.waitSecondsRemaining = pickLieDuration(this.random)
       } else {
         this.waitSecondsRemaining = pickIdleDuration(this.random)

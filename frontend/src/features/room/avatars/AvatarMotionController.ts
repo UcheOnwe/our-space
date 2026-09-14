@@ -47,6 +47,14 @@ export class AvatarMotionController {
   private readonly unsignedContainerScaleX: number
 
   private state: AvatarBehaviorState = 'idle'
+  /** Multiplier on `unsignedContainerScaleX`, applied on top of it for
+   * whichever pose is currently active — 1 for standing/sitting (no
+   * change), something else only while lying (see avatarActivities.ts's
+   * `FurnitureInteractionPoint.scaleMultiplier`). Kept separate from
+   * `unsignedContainerScaleX` itself (rather than mutating that field)
+   * so `standUp()` can restore exactly 1 without needing to remember what
+   * the ORIGINAL magnitude was. */
+  private poseScaleMultiplier = 1
   private position: WorldPoint
   /** The remaining waypoints to walk through in order — see
    * walkableArea.ts's computeRoute. `route[0]` is the current leg's
@@ -104,31 +112,46 @@ export class AvatarMotionController {
    * a furniture activity's authored approach point (see
    * avatarActivities.ts); this method itself never moves the avatar there,
    * it only applies the final pose/position for the last small step onto
-   * the couch, which may differ slightly from the walkable approach point
-   * itself (see AvatarRig.ts's `setPose` for why sitting is a whole
+   * the couch/chair, which may differ slightly from the walkable approach
+   * point itself (see AvatarRig.ts's `setPose` for why sitting is a whole
    * separate illustration, not a rotated stand). Clears any in-progress
    * walk/settle state outright rather than letting it keep animating limbs
    * `setPose` is about to hide anyway.
+   *
+   * `options` carries a furniture activity's OWN pose scale/rotation (see
+   * avatarActivities.ts's `FurnitureInteractionPoint`) — every V1 sitting
+   * point uses the defaults (scale 1, rotation 0), so this is here mainly
+   * for `lieAt` below to share the same plumbing, not because any sitting
+   * spot needs it yet.
    */
-  sitAt(position: WorldPoint): void {
+  sitAt(position: WorldPoint, options?: { scaleMultiplier?: number; rotation?: number }): void {
     this.route = []
     this.settlingFromLimbs = null
     this.position = { ...position }
     this.rig.container.position.set(this.position.x, this.position.y)
     this.rig.setPose('sitting')
+    this.applyPoseTransform(options)
     this.state = transition(this.state, { type: 'SIT' })
   }
 
   /** Lies the rig down at `position` — the lying counterpart to `sitAt`,
    * same "already walked to the approach point, this is the final
    * placement" contract. See AvatarRig.ts's `setPose` for why lying shows
-   * no separate head sprite. */
-  lieAt(position: WorldPoint): void {
+   * no separate head sprite.
+   *
+   * `options.scaleMultiplier` is how bed lying reads at a believable size
+   * against the bed (see avatarActivities.ts's `BED_ACTIVITY_POINTS`) —
+   * applied to the container on top of its normal standing scale, never by
+   * changing that standing scale itself, so standing/sitting and the
+   * male:female ratio are completely unaffected (see
+   * `applyContainerScale`). */
+  lieAt(position: WorldPoint, options?: { scaleMultiplier?: number; rotation?: number }): void {
     this.route = []
     this.settlingFromLimbs = null
     this.position = { ...position }
     this.rig.container.position.set(this.position.x, this.position.y)
     this.rig.setPose('lying')
+    this.applyPoseTransform(options)
     this.state = transition(this.state, { type: 'LIE' })
   }
 
@@ -137,11 +160,24 @@ export class AvatarMotionController {
    * AvatarAutonomyDirector always stands up first, same as a real person
    * would). Resets limbs to their neutral standing angles so a later walk
    * doesn't briefly show whatever mid-stride angles happened to be set
-   * before the avatar sat down. */
+   * before the avatar sat down, and resets any pose scale/rotation back to
+   * the rig's normal standing transform. */
   standUp(): void {
     this.rig.setPose('standing')
     this.rig.setLimbAngles(this.neutral)
+    this.poseScaleMultiplier = 1
+    this.rig.container.rotation = 0
+    this.applyContainerScale()
     this.state = transition(this.state, { type: 'STAND' })
+  }
+
+  /** Shared by sitAt/lieAt: applies a furniture activity's own pose scale/
+   * rotation, defaulting to "no change" (scale 1, rotation 0) when a
+   * caller doesn't pass one. */
+  private applyPoseTransform(options?: { scaleMultiplier?: number; rotation?: number }): void {
+    this.poseScaleMultiplier = options?.scaleMultiplier ?? 1
+    this.rig.container.rotation = options?.rotation ?? 0
+    this.applyContainerScale()
   }
 
   /** Advances the walk/settle animation by `deltaSeconds` (real elapsed
@@ -201,6 +237,18 @@ export class AvatarMotionController {
     // container never touches individual limb mirroring, Z-order, or the
     // female hair-covers-shoulder rule, all of which are internal to the
     // container and unaffected by its own overall sign.
-    this.rig.container.scale.x = facing === 'left' ? -this.unsignedContainerScaleX : this.unsignedContainerScaleX
+    this.applyContainerScale()
+  }
+
+  /** Recomputes `container.scale` from the three things that can each
+   * independently change it — facing (sign only), and the current pose's
+   * scale multiplier (magnitude only, see `poseScaleMultiplier`) — so
+   * changing either one can never accidentally clobber the other. `.y`
+   * never mirrors (only `.x` carries the facing sign), matching the
+   * existing convention that facing is a purely horizontal flip. */
+  private applyContainerScale(): void {
+    const magnitude = this.unsignedContainerScaleX * this.poseScaleMultiplier
+    this.rig.container.scale.x = this.facing === 'left' ? -magnitude : magnitude
+    this.rig.container.scale.y = magnitude
   }
 }

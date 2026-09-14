@@ -47,12 +47,15 @@ export interface AvatarAttachmentConfig {
   hipLeft: NormalizedPoint
   hipRight: NormalizedPoint
   /** The neck point on `bodySitting`'s OWN image — a fraction of ITS
-   * dimensions, not `bodyBase`'s (the two aren't the same crop). Only
-   * `neck` needs a per-pose variant: `bodySitting` still shows a normal
-   * upright neck/collar a head sprite can attach to the usual way, unlike
-   * `bodyLying` (no per-pose point at all — see AvatarRig.ts's `setPose`
-   * for why lying renders with no separate head). */
+   * dimensions, not `bodyBase`'s (the two aren't the same crop). */
   sittingNeck: NormalizedPoint
+  /** The neck/collar point on `bodyLying`'s OWN image — a fraction of ITS
+   * dimensions. The lying illustration is reclined at an angle rather than
+   * upright, so this point alone isn't enough to attach a head naturally;
+   * pair it with `AvatarRigConfig.lyingHeadRotation`, which rotates the
+   * head to match the body's own reclined angle at that point — see
+   * AvatarRig.ts's `setPose`. */
+  lyingNeck: NormalizedPoint
 }
 
 /** Where each limb/head's OWN rotation pivot sits, expressed as a fraction
@@ -96,6 +99,15 @@ export interface AvatarRigConfig {
    * entirely (it sets rotation outright, not additively) — that's fine
    * while animation stays off, but worth remembering when it comes back. */
   legStanceRotation?: number
+  /** Rotation, in radians, applied to the HEAD sprite only (not the whole
+   * container) while lying — see AvatarAttachmentConfig.lyingNeck's doc
+   * comment. `bodyLying` depicts each character reclined at their own
+   * measured angle, not a fixed shared one (the two illustrations aren't
+   * posed identically), so this is per-character like every other
+   * attachment/pivot value, measured against the real art rather than
+   * assumed. Omit (or leave 0) only makes sense for art with no reclining
+   * tilt at all — every V1 lying illustration has one. */
+  lyingHeadRotation?: number
 }
 
 export interface LimbAngles {

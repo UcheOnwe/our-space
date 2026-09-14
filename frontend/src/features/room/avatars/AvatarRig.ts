@@ -1,6 +1,7 @@
 import { Container, Sprite } from 'pixi.js'
 import type { Texture } from 'pixi.js'
 import { limbMirrorScaleX, normalizedToLocal, selectHeadTexture } from './rigGeometry'
+import { LYING_HEAD_SCALE, SITTING_HEAD_SCALE, STANDING_HEAD_SCALE } from './avatarConfigs'
 import type { AvatarExpression, AvatarRigConfig, AvatarSide, LimbAngles } from './avatarTypes'
 
 export interface AvatarTextures {
@@ -95,6 +96,15 @@ export class AvatarRig {
     this.head = new Sprite(textures.headIdle)
     this.head.label = 'head'
     this.head.anchor.set(config.pivots.head.x, config.pivots.head.y)
+    // Scaled around its own anchor (near the chin — see avatarConfigs.ts's
+    // pivots) — never the container's overall scale, so this can't touch
+    // the body, the male:female height ratio, or the room's overall avatar
+    // scale. The rig starts in `standing` (see the `pose` field default)
+    // without `setPose` ever running for that initial state, so the
+    // standing scale has to be applied here too, not only in `setPose` —
+    // see that method for sitting/lying, and avatarConfigs.ts for why this
+    // is per-pose rather than one shared multiplier.
+    this.head.scale.set(STANDING_HEAD_SCALE)
     this.head.position.copyFrom(this.toLocal(config.attachments.neck))
 
     // Fixed back-to-front order for BOTH characters: legs behind the body,
@@ -171,6 +181,18 @@ export class AvatarRig {
     return this.pose
   }
 
+  /** Shows/hides the WHOLE assembled rig — used only by
+   * CoupleHugCoordinator.ts, to hide both avatars' independent rigs while
+   * the combined `interaction_hug_couple` sprite stands in for them, then
+   * restore them afterward. Deliberately a plain visibility toggle, not a
+   * fourth `AvatarPose`: hug isn't a pose this rig itself performs (it
+   * shows nothing at all during it), and keeping it out of `setPose`
+   * avoids that method needing to know about a whole separate,
+   * two-avatar-coordinated system it has no other reason to care about. */
+  setVisible(visible: boolean): void {
+    this.container.visible = visible
+  }
+
   /**
    * Switches which whole-body presentation this rig shows. `sitting`/
    * `lying` each swap `body.texture` to a complete, already-posed
@@ -180,24 +202,30 @@ export class AvatarRig {
    * seated/reclining angle the way `setLimbAngles` bends a standing walk
    * cycle. Idempotent — re-entering the current pose is a no-op.
    *
-   * Head handling differs per pose, both measured directly off the real
+   * Head handling differs per pose, all measured directly off the real
    * production art (not assumed):
-   * - `standing`/`sitting` both show a normal upright head, attached at
-   *   `config.attachments.neck`/`sittingNeck` respectively — `bodySitting`
-   *   still draws an ordinary collar/neck opening a head sprite attaches
-   *   to the usual way, just at a different point than `bodyBase`'s (the
-   *   two aren't the same crop, so a fresh `toLocal` read against
-   *   whichever texture is now current is required — see `toLocal`).
-   * - `lying` shows NO separate head sprite at all. `bodyLying` is a
-   *   reclining pose with the body rotated ~90° from upright — attaching
-   *   the existing front-facing head art there would need a rotated
-   *   head/neck join this rig has no calibrated reference for, and both
-   *   characters' lying art already reads as a complete figure without
-   *   one (the male's crossed-behind-the-head arms specifically compose
-   *   around where a head would be). Faking that attachment now would be
-   *   the same mistake the walking lean/bob were — inventing a transform
-   *   with no real reference — so this waits for real lying-pose head
-   *   art/calibration in a later slice instead.
+   * - `standing`/`sitting` both show a normal upright head (rotation 0) at
+   *   `STANDING_HEAD_SCALE`/`SITTING_HEAD_SCALE` respectively, attached at
+   *   `config.attachments.neck`/`sittingNeck` — `bodySitting` still draws
+   *   an ordinary collar/neck opening a head sprite attaches to the usual
+   *   way, just at a different point than `bodyBase`'s (the two aren't the
+   *   same crop, so a fresh `toLocal` read against whichever texture is
+   *   now current is required — see `toLocal`).
+   * - `lying` also shows the head, at `LYING_HEAD_SCALE` and attached at
+   *   `attachments.lyingNeck` — but `bodyLying` depicts each character
+   *   reclined at an angle, not upright, so the head is ALSO rotated by
+   *   `config.lyingHeadRotation` to match that angle at the attachment
+   *   point (rotating around the head's own pivot, same as every other
+   *   limb rotation in this rig — see `setLimbAngles`). Both the point and
+   *   the rotation were measured directly against the real `body_lying`
+   *   art per character (the two illustrations recline at different
+   *   angles — see avatarConfigs.ts), not assumed or reused from standing.
+   *
+   * Each branch sets the head's scale explicitly (not just its position/
+   * rotation) — see avatarConfigs.ts for why this is three independent
+   * per-pose constants rather than one shared multiplier: a previous
+   * shared-multiplier pass, changed here to fix lying, silently also
+   * changed the already-approved standing/walking appearance.
    */
   setPose(pose: AvatarPose): void {
     if (this.pose === pose) return
@@ -212,14 +240,21 @@ export class AvatarRig {
     if (pose === 'standing') {
       this.body.texture = this.textures.bodyBase
       this.head.visible = true
+      this.head.rotation = 0
+      this.head.scale.set(STANDING_HEAD_SCALE)
       this.head.position.copyFrom(this.toLocal(this.config.attachments.neck))
     } else if (pose === 'sitting') {
       this.body.texture = this.textures.bodySitting
       this.head.visible = true
+      this.head.rotation = 0
+      this.head.scale.set(SITTING_HEAD_SCALE)
       this.head.position.copyFrom(this.toLocal(this.config.attachments.sittingNeck))
     } else {
       this.body.texture = this.textures.bodyLying
-      this.head.visible = false
+      this.head.visible = true
+      this.head.rotation = this.config.lyingHeadRotation ?? 0
+      this.head.scale.set(LYING_HEAD_SCALE)
+      this.head.position.copyFrom(this.toLocal(this.config.attachments.lyingNeck))
     }
   }
 

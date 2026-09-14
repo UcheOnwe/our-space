@@ -277,5 +277,79 @@ describe('AvatarMotionController', () => {
       expect(controller.getState()).toBe('walking')
       expect(rig.getPose()).toBe('standing')
     })
+
+    describe('pose scale/rotation (bed-lying scale fix)', () => {
+      it('sitAt with no options leaves the container at its normal standing scale magnitude', () => {
+        const rig = new AvatarRig(MALE_AVATAR_CONFIG, fakeTextures(), FAKE_BASE_SCALE)
+        const controller = new AvatarMotionController(rig, MALE_AVATAR_CONFIG, { x: 500, y: 700 })
+        const standingMagnitude = Math.abs(rig.container.scale.x)
+
+        controller.sitAt({ x: 744, y: 610 })
+
+        expect(Math.abs(rig.container.scale.x)).toBeCloseTo(standingMagnitude)
+        expect(rig.container.rotation).toBe(0)
+      })
+
+      it('lieAt applies the given scaleMultiplier on top of the standing scale, preserving facing sign', () => {
+        const rig = new AvatarRig(MALE_AVATAR_CONFIG, fakeTextures(), FAKE_BASE_SCALE)
+        const controller = new AvatarMotionController(rig, MALE_AVATAR_CONFIG, { x: 500, y: 700 })
+        const standingMagnitude = Math.abs(rig.container.scale.x)
+
+        controller.lieAt({ x: 1060, y: 350 }, { scaleMultiplier: 1.9 })
+
+        expect(Math.abs(rig.container.scale.x)).toBeCloseTo(standingMagnitude * 1.9)
+        expect(rig.container.scale.y).toBeCloseTo(standingMagnitude * 1.9)
+        // Facing was 'right' by default (see the class's initial state) —
+        // scaling up must not flip that sign.
+        expect(rig.container.scale.x).toBeGreaterThan(0)
+      })
+
+      it('lieAt applies an optional rotation', () => {
+        const rig = new AvatarRig(MALE_AVATAR_CONFIG, fakeTextures(), FAKE_BASE_SCALE)
+        const controller = new AvatarMotionController(rig, MALE_AVATAR_CONFIG, { x: 500, y: 700 })
+
+        controller.lieAt({ x: 1060, y: 350 }, { rotation: 0.3 })
+
+        expect(rig.container.rotation).toBeCloseTo(0.3)
+      })
+
+      it('standUp resets both the pose scale multiplier and rotation back to the normal standing transform', () => {
+        const rig = new AvatarRig(MALE_AVATAR_CONFIG, fakeTextures(), FAKE_BASE_SCALE)
+        const controller = new AvatarMotionController(rig, MALE_AVATAR_CONFIG, { x: 500, y: 700 })
+        const standingMagnitude = Math.abs(rig.container.scale.x)
+
+        controller.lieAt({ x: 1060, y: 350 }, { scaleMultiplier: 1.9, rotation: 0.3 })
+        controller.standUp()
+
+        expect(Math.abs(rig.container.scale.x)).toBeCloseTo(standingMagnitude)
+        expect(rig.container.rotation).toBe(0)
+      })
+
+      it('preserves the male:female relative scale ratio while both are lying with the same multiplier', () => {
+        const maleRig = new AvatarRig(MALE_AVATAR_CONFIG, fakeTextures(), FAKE_BASE_SCALE)
+        const femaleRig = new AvatarRig(FEMALE_AVATAR_CONFIG, fakeTextures(), FAKE_BASE_SCALE)
+        const maleController = new AvatarMotionController(maleRig, MALE_AVATAR_CONFIG, { x: 500, y: 700 })
+        const femaleController = new AvatarMotionController(femaleRig, FEMALE_AVATAR_CONFIG, { x: 500, y: 700 })
+
+        maleController.lieAt({ x: 1060, y: 350 }, { scaleMultiplier: 1.9 })
+        femaleController.lieAt({ x: 1060, y: 350 }, { scaleMultiplier: 1.9 })
+
+        const ratio = Math.abs(maleRig.container.scale.x) / Math.abs(femaleRig.container.scale.x)
+        expect(ratio).toBeCloseTo(MALE_AVATAR_CONFIG.relativeScale / FEMALE_AVATAR_CONFIG.relativeScale, 5)
+      })
+
+      it('a subsequent walk (moveTo) after lying restores the normal scale, not the lying multiplier', () => {
+        const rig = new AvatarRig(MALE_AVATAR_CONFIG, fakeTextures(), FAKE_BASE_SCALE)
+        const controller = new AvatarMotionController(rig, MALE_AVATAR_CONFIG, { x: 500, y: 700 }, FAST_SPEED)
+        const standingMagnitude = Math.abs(rig.container.scale.x)
+
+        controller.lieAt({ x: 1060, y: 350 }, { scaleMultiplier: 1.9 })
+        controller.standUp()
+        controller.moveTo({ x: 600, y: 700 })
+        controller.update(0.05)
+
+        expect(Math.abs(rig.container.scale.x)).toBeCloseTo(standingMagnitude)
+      })
+    })
   })
 })

@@ -24,6 +24,7 @@ describe('AVATAR_CONFIGS completeness', () => {
     'hipLeft',
     'hipRight',
     'sittingNeck',
+    'lyingNeck',
   ] as const
   const requiredPivotKeys = ['arm', 'leg', 'head'] as const
 
@@ -69,6 +70,12 @@ describe('AVATAR_CONFIGS completeness', () => {
       const { shoulderLeft, shoulderRight, hipLeft, hipRight } = AVATAR_CONFIGS[gender].attachments
       expect(shoulderLeft.x).toBeLessThan(shoulderRight.x)
       expect(hipLeft.x).toBeLessThan(hipRight.x)
+    }
+  })
+
+  it('gives every character a nonzero lyingHeadRotation — the reclined pose art has no upright character', () => {
+    for (const gender of ['male', 'female'] as const) {
+      expect(AVATAR_CONFIGS[gender].lyingHeadRotation).toBeTruthy()
     }
   })
 })

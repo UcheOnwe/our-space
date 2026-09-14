@@ -44,10 +44,6 @@
   font-size: 14px;
 }
 
-.watchTogetherButton {
-  align-self: flex-start;
-}
-
 @media (max-width: 700px) {
   .header {
     flex-direction: column;

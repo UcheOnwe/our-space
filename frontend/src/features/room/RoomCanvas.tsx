@@ -4,13 +4,15 @@ import { useEffect, useRef } from 'react'
 import { AvatarAutonomyDirector } from './avatars/AvatarAutonomyDirector'
 import { AvatarMotionController } from './avatars/AvatarMotionController'
 import { AvatarRig } from './avatars/AvatarRig'
+import { CoupleHugCoordinator } from './avatars/CoupleHugCoordinator'
 import { loadAvatarTextures } from './avatars/createAvatarRig'
 import { FEMALE_AVATAR_CONFIG, MALE_AVATAR_CONFIG, TARGET_BODY_HEIGHT_WORLD_UNITS } from './avatars/avatarConfigs'
+import { HUG_INTERACTION_POINT, HUG_SPRITE_TEXTURE_PATH, HUG_SPRITE_WORLD_SIZE } from './avatars/avatarActivities'
 import { clampPan, computeCameraFrame } from './camera'
 import { ROOM_WORLD_HEIGHT, ROOM_WORLD_WIDTH } from './constants'
 import { createRoomLayers } from './layers'
 import { ENVIRONMENT_TEXTURE_PATH, FURNITURE_PLACEMENTS, LAMP_BASE, LAMP_GLOW } from './roomAssets'
-import { syncFloorDepth } from './roomDepth'
+import { computeAvatarDepthKey, syncFloorDepth } from './roomDepth'
 import type { RoomLayers } from './layers'
 import styles from './RoomCanvas.module.css'
 
@@ -81,7 +83,14 @@ async function loadFurniture(layers: RoomLayers): Promise<Sprite[]> {
  * own; it moves exactly with its base. This slice deliberately hardcodes
  * the lamp ON — no interaction, persistence, or day/night state yet.
  */
-async function loadLamp(layers: RoomLayers): Promise<void> {
+/** On-brightness the lamp glow renders at while ON — reused by
+ * setupLampInteraction below as the "on" end of its fade, so the
+ * hardcoded-ON value this slice's predecessor shipped with becomes the
+ * toggle's own steady state rather than two separate numbers to keep in
+ * sync. */
+const LAMP_GLOW_ON_ALPHA = 0.85
+
+async function loadLamp(layers: RoomLayers): Promise<{ base: Sprite; glow: Sprite }> {
   const [baseTexture, glowTexture] = await Promise.all([
     Assets.load(LAMP_BASE.texturePath),
     Assets.load(LAMP_GLOW.texturePath),
@@ -104,7 +113,7 @@ async function loadLamp(layers: RoomLayers): Promise<void> {
   glow.width = LAMP_GLOW.width
   glow.height = LAMP_GLOW.height
   glow.blendMode = 'add'
-  glow.alpha = 0.85
+  glow.alpha = LAMP_GLOW_ON_ALPHA
 
   group.addChild(base, glow)
   // The lamp never moves, so its depth key is set once here rather than
@@ -113,6 +122,8 @@ async function loadLamp(layers: RoomLayers): Promise<void> {
   // other piece of furniture already places itself at.
   syncFloorDepth({ container: group }, LAMP_BASE.position.y)
   layers.avatars.addChild(group)
+
+  return { base, glow }
 }
 
 // How quickly the hover glow eases toward its target alpha each tick —
@@ -243,6 +254,261 @@ function setupTvInteraction(
   }
 }
 
+// --- Lamp interaction + ON/OFF room ambience -------------------------------
+// Same easing rate as the TV's hover glow (TV_GLOW_EASE) — one shared feel
+// for "a light effect fading in/out," not a second tuned value.
+const LAMP_GLOW_EASE = 0.18
+// How dark the room reads with the lamp off — a MULTIPLY blend at this
+// alpha darkens everything toward the tint color proportionally (bright
+// areas stay relatively bright, dark areas get darker), which is what
+// keeps the room "clearly visible... not nearly black" while still
+// reading as a real ambience change. Nudged darker than this feature's
+// first pass (0.42) after manual review asked for "slightly darker than
+// the current OFF state" — the device/window glows added below are what
+// keep the room feeling alive at this slightly deeper dim, rather than
+// just flatly darker. Tuned by live visual comparison, not computed.
+const ROOM_AMBIENCE_OFF_ALPHA = 0.5
+// Muted deep plum/navy — the room's own window already shows a dusk/
+// night skyline in this same family of tones, so dimming toward it (with
+// the lamp itself the one thing NOT reflecting that tint, since it's
+// tucked in its own group unaffected by an effects-layer overlay drawn on
+// top of everything) reads as "this room at night," not an arbitrary
+// gray dim.
+const ROOM_AMBIENCE_COLOR = 0x2b2044
+
+/** The lamp's own hover highlight — same concentric-rings "fake soft
+ * edge" technique buildTvGlow uses (a BlurFilter combined with
+ * blendMode:'add' rendered fully invisible on this engine version — see
+ * buildTvGlow's doc comment), just re-sized for the lamp's much smaller
+ * footprint; kept as its own small function rather than generalizing
+ * buildTvGlow into a shared helper, so tuning one can never accidentally
+ * shift the other's already-approved look. */
+function buildLampHoverGlow(lampBaseSprite: Sprite): Graphics {
+  const renderedWidth = lampBaseSprite.texture.width * lampBaseSprite.scale.x
+  const renderedHeight = lampBaseSprite.texture.height * lampBaseSprite.scale.y
+  const centerX = lampBaseSprite.position.x - (lampBaseSprite.anchor.x - 0.5) * renderedWidth
+  const centerY = lampBaseSprite.position.y - (lampBaseSprite.anchor.y - 0.5) * renderedHeight
+
+  const glow = new Graphics()
+  const rings: Array<[number, number]> = [
+    [18, 0.1],
+    [11, 0.16],
+    [5, 0.26],
+    [2, 0.4],
+  ]
+  for (const [padding, ringAlpha] of rings) {
+    glow
+      .roundRect(
+        centerX - renderedWidth / 2 - padding,
+        centerY - renderedHeight / 2 - padding,
+        renderedWidth + padding * 2,
+        renderedHeight + padding * 2,
+        14 + padding * 0.4,
+      )
+      .fill({ color: 0xfff3c4, alpha: ringAlpha })
+  }
+  glow.label = 'lamp-hover-glow'
+  glow.blendMode = 'add'
+  glow.alpha = 0
+  glow.eventMode = 'none'
+  return glow
+}
+
+/**
+ * A soft rounded-rect "fake glow" — the same concentric-rings technique
+ * buildTvGlow/buildLampHoverGlow already use (a real BlurFilter combined
+ * with blendMode:'add' rendered fully invisible on this engine version —
+ * see buildTvGlow's own doc comment for the direct A/B confirmation),
+ * generalized here since the night-ambience glows below are the same
+ * shape repeated at different positions/sizes/colors rather than each
+ * needing its own bespoke ring math. NOT used for the lamp's own two
+ * existing glows above — those were already approved individually and
+ * are left exactly as they were built, per the "don't rework unless a
+ * real issue" direction.
+ */
+function buildNightEmissiveGlow(
+  centerX: number,
+  centerY: number,
+  width: number,
+  height: number,
+  color: number,
+  label: string,
+): Graphics {
+  const glow = new Graphics()
+  // Padding as a smaller fraction of the region's own size than the
+  // TV-hover-glow's fixed pixel paddings use — these regions vary a lot in
+  // size (the window's is much bigger than the monitor's), so a
+  // proportional falloff keeps each one reading as "glowing at its own
+  // edges" rather than the window's version bleeding across half the room.
+  const rings: Array<[number, number]> = [
+    [width * 0.16, 0.1],
+    [width * 0.09, 0.18],
+    [width * 0.03, 0.32],
+  ]
+  for (const [padding, ringAlpha] of rings) {
+    glow
+      .roundRect(centerX - width / 2 - padding, centerY - height / 2 - padding, width + padding * 2, height + padding * 2, 16)
+      .fill({ color, alpha: ringAlpha })
+  }
+  glow.label = label
+  glow.blendMode = 'add'
+  glow.alpha = 0
+  glow.eventMode = 'none'
+  return glow
+}
+
+// --- Night-ambience emissive glows (lamp OFF only) --------------------
+// Authored world-unit regions for the room's own already-visible light
+// sources — no new art, no source-artwork changes, just additive glow
+// shapes over the existing production backplate/furniture at their real
+// positions (see roomAssets.ts for the furniture placements these are
+// measured against). Restrained on purpose per the approved plan ("do not
+// make the room neon... do not overpower the room") — these read as a
+// gentle presence, not a light source in their own right.
+//
+// Window: the tall cityscape window against the left wall, above/behind
+// the TV console (roomAssets.ts's `tv` sits at x=262 — the window spans
+// roughly that same horizontal position, from the wall up to the ceiling
+// above it). A cool lavender/pink tint — night-sky city light through
+// glass — distinct from the warm lamp/TV glows.
+const WINDOW_GLOW_REGION = { centerX: 150, centerY: 220, width: 260, height: 280 }
+const WINDOW_GLOW_COLOR = 0xb99bdc
+
+// TV screen: a sub-region of the `tv` sprite's own bounds (world position
+// 262,538 — see roomAssets.ts), not its whole console — just the glowing
+// screen area near the top of that sprite.
+const TV_SCREEN_GLOW_REGION = { centerX: 262, centerY: 470, width: 200, height: 110 }
+const TV_SCREEN_GLOW_COLOR = 0xcfe6ff
+
+// Desk monitor: a sub-region of the `desk` sprite's own bounds (world
+// position 734,396 — see roomAssets.ts) — the monitor screen baked into
+// that same production art, not a separate cutout. Smaller and fainter
+// than the TV's own glow per "very restrained" for secondary devices.
+const MONITOR_GLOW_REGION = { centerX: 734, centerY: 330, width: 90, height: 60 }
+const MONITOR_GLOW_COLOR = 0xcfe6ff
+const MONITOR_GLOW_MAX_ALPHA = 0.5 // relative to the TV's own full-strength glow — see the tick function
+
+/**
+ * Wires up the lamp as the room's second interactive furniture piece:
+ * hover feedback + a click/tap that toggles `lampOn`/`lampOff` ambience —
+ * the approved V1 scope (two states only, no day/night system, no
+ * persistence). Several things fade together on toggle, all via the same
+ * lightweight easing buildTvGlow's own tick already established: the
+ * lamp's own "on" glow (hidden when off), a small hover highlight (still
+ * available either way — the lamp stays clickable off, to turn back on),
+ * a full-room ambience tint drawn in `layers.effects` (see
+ * ROOM_AMBIENCE_COLOR/ROOM_AMBIENCE_OFF_ALPHA above), and three restrained
+ * additive glows over the room's own already-visible light sources —
+ * window, TV screen, desk monitor (see buildNightEmissiveGlow and the
+ * WINDOW_GLOW_REGION/TV_SCREEN_GLOW_REGION/MONITOR_GLOW_REGION constants
+ * above) — that only appear once the lamp is off, so the room reads as
+ * "darker, but still alive at night" rather than uniformly dim. All of it
+ * is an overlay over the existing production art, never a change to the
+ * art itself, per the approved plan.
+ *
+ * Same `eventMode: 'static'`, bounds-only hit-testing the TV already
+ * established (see setupTvInteraction's own doc comment) — no custom
+ * hitArea. The lamp base's rendered footprint (108x117 world units) is
+ * smaller than the TV's, so if manual mobile testing finds it too tight a
+ * tap target, a dedicated hit-area rectangle is the follow-up; not added
+ * speculatively here to avoid an unverified custom-hitArea/anchor
+ * interaction under this slice's time budget.
+ */
+function setupLampInteraction(
+  lampBase: Sprite,
+  lampGlow: Sprite,
+  layers: RoomLayers,
+  application: Application,
+): () => void {
+  const hoverGlow = buildLampHoverGlow(lampBase)
+  layers.lighting.addChild(hoverGlow)
+
+  const ambience = new Graphics().rect(0, 0, ROOM_WORLD_WIDTH, ROOM_WORLD_HEIGHT).fill(ROOM_AMBIENCE_COLOR)
+  ambience.label = 'room-ambience-overlay'
+  ambience.blendMode = 'multiply'
+  ambience.alpha = 0
+  ambience.eventMode = 'none'
+  layers.effects.addChild(ambience)
+
+  // Night-only device/window glows — added AFTER the ambience overlay
+  // (layers.effects has no sortableChildren, so this is plain insertion
+  // order) so each one composites on TOP of the darkened base, the same
+  // way a real lit screen or window reads as its own light source rather
+  // than getting dimmed along with everything else.
+  const windowGlow = buildNightEmissiveGlow(
+    WINDOW_GLOW_REGION.centerX,
+    WINDOW_GLOW_REGION.centerY,
+    WINDOW_GLOW_REGION.width,
+    WINDOW_GLOW_REGION.height,
+    WINDOW_GLOW_COLOR,
+    'window-night-glow',
+  )
+  const tvScreenGlow = buildNightEmissiveGlow(
+    TV_SCREEN_GLOW_REGION.centerX,
+    TV_SCREEN_GLOW_REGION.centerY,
+    TV_SCREEN_GLOW_REGION.width,
+    TV_SCREEN_GLOW_REGION.height,
+    TV_SCREEN_GLOW_COLOR,
+    'tv-screen-night-glow',
+  )
+  const monitorGlow = buildNightEmissiveGlow(
+    MONITOR_GLOW_REGION.centerX,
+    MONITOR_GLOW_REGION.centerY,
+    MONITOR_GLOW_REGION.width,
+    MONITOR_GLOW_REGION.height,
+    MONITOR_GLOW_COLOR,
+    'monitor-night-glow',
+  )
+  layers.effects.addChild(windowGlow, tvScreenGlow, monitorGlow)
+
+  let lampOn = true
+  let hoverTargetAlpha = 0
+
+  function tick() {
+    const glowTarget = lampOn ? LAMP_GLOW_ON_ALPHA : 0
+    lampGlow.alpha += (glowTarget - lampGlow.alpha) * LAMP_GLOW_EASE
+    const ambienceTarget = lampOn ? 0 : ROOM_AMBIENCE_OFF_ALPHA
+    ambience.alpha += (ambienceTarget - ambience.alpha) * LAMP_GLOW_EASE
+    hoverGlow.alpha += (hoverTargetAlpha - hoverGlow.alpha) * LAMP_GLOW_EASE
+
+    // Only present once the room actually goes dark — these read as
+    // "this device/window is lit," which isn't a meaningful thing to see
+    // during the room's normal warm/daytime appearance.
+    const deviceGlowTarget = lampOn ? 0 : 1
+    windowGlow.alpha += (deviceGlowTarget - windowGlow.alpha) * LAMP_GLOW_EASE
+    tvScreenGlow.alpha += (deviceGlowTarget - tvScreenGlow.alpha) * LAMP_GLOW_EASE
+    monitorGlow.alpha += (deviceGlowTarget * MONITOR_GLOW_MAX_ALPHA - monitorGlow.alpha) * LAMP_GLOW_EASE
+  }
+  application.ticker.add(tick)
+
+  lampBase.eventMode = 'static'
+  lampBase.cursor = 'pointer'
+  function handleOver() {
+    hoverTargetAlpha = 0.3
+  }
+  function handleOut() {
+    hoverTargetAlpha = 0
+  }
+  function handleTap() {
+    lampOn = !lampOn
+  }
+  lampBase.on('pointerover', handleOver)
+  lampBase.on('pointerout', handleOut)
+  lampBase.on('pointertap', handleTap)
+
+  return () => {
+    application.ticker.remove(tick)
+    lampBase.off('pointerover', handleOver)
+    lampBase.off('pointerout', handleOut)
+    lampBase.off('pointertap', handleTap)
+    hoverGlow.destroy()
+    ambience.destroy()
+    windowGlow.destroy()
+    tvScreenGlow.destroy()
+    monitorGlow.destroy()
+  }
+}
+
 interface RoomCanvasProps {
   /** Opens Watch Together — the exact same callback CoupleHomePage passes
    * to the accessible "Start Watching" button, so the TV's click/tap and
@@ -286,6 +552,7 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
     let resizeObserver: ResizeObserver | null = null
     let avatarCleanup: (() => void) | null = null
     let tvCleanup: (() => void) | null = null
+    let lampCleanup: (() => void) | null = null
 
     async function setup() {
       const application = new Application()
@@ -345,7 +612,7 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
       try {
         const furnitureSprites = await loadFurniture(layers)
         if (cancelled) return
-        await loadLamp(layers)
+        const lampSprites = await loadLamp(layers)
         if (cancelled) return
 
         // The TV is the room's first interactive furniture piece — see
@@ -356,6 +623,10 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
         if (tvSprite) {
           tvCleanup = setupTvInteraction(tvSprite, layers, application, () => onOpenWatchRef.current)
         }
+
+        // The lamp is the second — see setupLampInteraction's own docs for
+        // the ON/OFF ambience design.
+        lampCleanup = setupLampInteraction(lampSprites.base, lampSprites.glow, layers, application)
       } catch (error) {
         console.warn('Our Space: room furniture could not load.', error)
       }
@@ -371,7 +642,12 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
           const [
             { textures: maleTextures, headSadReady: maleHeadSadReady },
             { textures: femaleTextures, headSadReady: femaleHeadSadReady },
-          ] = await Promise.all([loadAvatarTextures(MALE_AVATAR_CONFIG), loadAvatarTextures(FEMALE_AVATAR_CONFIG)])
+            hugTexture,
+          ] = await Promise.all([
+            loadAvatarTextures(MALE_AVATAR_CONFIG),
+            loadAvatarTextures(FEMALE_AVATAR_CONFIG),
+            Assets.load(HUG_SPRITE_TEXTURE_PATH),
+          ])
 
           // One shared baseScale, computed from the female's body texture
           // (the relativeScale=1.0 reference) and reused verbatim for the
@@ -429,19 +705,57 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
           const maleDirector = new AvatarAutonomyDirector(maleMotion)
           const femaleDirector = new AvatarAutonomyDirector(femaleMotion)
 
+          // --- Couple hug ---
+          // The combined sprite stands in for BOTH independent rigs while
+          // hugging (see CoupleHugCoordinator.ts) — added once, hidden,
+          // positioned at the one authored hug point (avatarActivities.ts)
+          // for the whole room's lifetime, the same "static entity, depth
+          // key set once" pattern the lamp group already uses.
+          const hugSprite = new Sprite(hugTexture)
+          hugSprite.label = 'couple-hug'
+          hugSprite.anchor.set(0.5, 1)
+          hugSprite.position.set(HUG_INTERACTION_POINT.x, HUG_INTERACTION_POINT.y)
+          hugSprite.width = HUG_SPRITE_WORLD_SIZE.width
+          hugSprite.height = HUG_SPRITE_WORLD_SIZE.height
+          hugSprite.visible = false
+          syncFloorDepth({ container: hugSprite }, HUG_INTERACTION_POINT.y)
+          layers.avatars.addChild(hugSprite)
+
+          const hugCoordinator = new CoupleHugCoordinator(
+            { motion: maleMotion, director: maleDirector, rig: male },
+            { motion: femaleMotion, director: femaleDirector, rig: female },
+            (visible) => {
+              hugSprite.visible = visible
+            },
+          )
+
           function tickAvatars(ticker: Ticker) {
             const deltaSeconds = ticker.deltaMS / 1000
             maleDirector.update(deltaSeconds)
             femaleDirector.update(deltaSeconds)
+            // After both solo directors, per CoupleHugCoordinator's own
+            // doc comment — it only ever READS their resulting state
+            // while deciding whether to start a hug, and while one IS
+            // under way both directors are already paused (see
+            // AvatarAutonomyDirector.pause), so this order never double-
+            // advances anything.
+            hugCoordinator.update(deltaSeconds)
 
             // Y-based depth sort (see roomDepth.ts) — each avatar's floor/
-            // contact point is just its own current world position, since
-            // both stand/sit/lie with a bottom-center (or, sitting, still
-            // feet-level) anchor. Re-synced every tick because this is
-            // exactly what needs to change AS an avatar walks past the
-            // lamp, not something to set once.
-            syncFloorDepth({ container: male.container }, maleMotion.getPosition().y)
-            syncFloorDepth({ container: female.container }, femaleMotion.getPosition().y)
+            // contact point is its own current world position, with the
+            // locked female-over-male tie-break applied only while lying
+            // (computeAvatarDepthKey) — see roomDepth.ts's own doc
+            // comment for why bed lying specifically needs one. Re-synced
+            // every tick because this is exactly what needs to change AS
+            // an avatar walks past the lamp, not something to set once.
+            syncFloorDepth(
+              { container: male.container },
+              computeAvatarDepthKey(maleMotion.getPosition().y, male.getPose(), 'male'),
+            )
+            syncFloorDepth(
+              { container: female.container },
+              computeAvatarDepthKey(femaleMotion.getPosition().y, female.getPose(), 'female'),
+            )
             layers.avatars.sortChildren()
           }
           application.ticker.add(tickAvatars)
@@ -545,6 +859,7 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
       cancelled = true
       avatarCleanup?.()
       tvCleanup?.()
+      lampCleanup?.()
       resizeObserver?.disconnect()
       app?.destroy(true, { children: true })
     }
