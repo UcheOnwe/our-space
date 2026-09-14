@@ -33,6 +33,29 @@ export const FEMALE_RELATIVE_SCALE = 1.0
 // mirroring) stay untouched.
 export const TARGET_BODY_HEIGHT_WORLD_UNITS = 80
 
+// A prior pass tried a single HEAD_SCALE_MULTIPLIER applied to every pose
+// alike (0.83, then 0.70 — see git history), chasing a "heads read too
+// large" impression. Manual review of the approved room found that
+// impression was wrong for standing/walking and sitting — their head size
+// was already the approved look and reducing it changed avatar appearance
+// that wasn't supposed to change — so both are restored to their native,
+// pre-reduction scale here. A single shared knob can't tell "standing"
+// and "lying" apart, which is exactly what went wrong; per-pose constants
+// below can, even where the values happen to currently agree.
+//
+// AvatarRig.ts's `setPose` applies these to the head SPRITE's own scale
+// only, never to TARGET_BODY_HEIGHT_WORLD_UNITS or either RELATIVE_SCALE
+// above — those govern the whole assembled rig (body + head + limbs
+// together) and would also resize the body if touched.
+export const STANDING_HEAD_SCALE = 1
+export const SITTING_HEAD_SCALE = 1
+// Confirmed live at this scale against the real lying art per character —
+// the lyingNeck/lyingHeadRotation attachment math above was originally
+// measured and approved at this exact scale (before either global
+// multiplier existed), so 1 here reproduces that same approved look
+// rather than introducing a new one.
+export const LYING_HEAD_SCALE = 1
+
 /**
  * Every attachment/pivot below is a FRACTION of the relevant texture's own
  * width/height, not a hardcoded pixel offset — see avatarTypes.ts.
@@ -132,6 +155,14 @@ const MALE_ATTACHMENTS: AvatarAttachmentConfig = {
   // every other attachment above — not derived from `neck` above, since
   // that's a fraction of a completely different image/crop).
   sittingNeck: { x: 0.454, y: 0.124 },
+  // Measured off male_body_lying's own visible neck opening (between the
+  // crossed arms), confirmed by rendering the real head against it at
+  // several candidate points/rotations until the join looked natural (no
+  // gap, no torso overlap) — same "confirm against the composited real
+  // art" standard as every other attachment in this file. See
+  // MALE_AVATAR_CONFIG.lyingHeadRotation for the matching rotation this
+  // point alone doesn't capture.
+  lyingNeck: { x: 0.305, y: 0.3 },
 }
 
 const FEMALE_ATTACHMENTS: AvatarAttachmentConfig = {
@@ -142,6 +173,13 @@ const FEMALE_ATTACHMENTS: AvatarAttachmentConfig = {
   hipRight: { x: 0.677, y: 0.8 },
   // Measured directly off female_body_sitting's own collar opening.
   sittingNeck: { x: 0.527, y: 0.098 },
+  // Measured off female_body_lying's own visible neck/collar opening,
+  // confirmed by rendering the real head against it — her hair (baked
+  // into the head texture) naturally drapes over most of the seam either
+  // way, the same female hair-covers-shoulder rule the standing rig
+  // already relies on. See FEMALE_AVATAR_CONFIG.lyingHeadRotation for the
+  // matching rotation.
+  lyingNeck: { x: 0.365, y: 0.335 },
 }
 
 export const MALE_AVATAR_CONFIG: AvatarRigConfig = {
@@ -171,6 +209,11 @@ export const MALE_AVATAR_CONFIG: AvatarRigConfig = {
   // closes that without touching the hip attachment or crotch coverage
   // it took two rounds to get right.
   legStanceRotation: 0.04,
+  // male_body_lying reclines at a diagonal (head at upper-left, feet at
+  // lower-right) — confirmed by rendering the real head against the real
+  // body at several candidate rotations until it matched the body's own
+  // reclined angle with no gap or overlap (see MALE_ATTACHMENTS.lyingNeck).
+  lyingHeadRotation: -0.4,
 }
 
 export const FEMALE_AVATAR_CONFIG: AvatarRigConfig = {
@@ -187,6 +230,11 @@ export const FEMALE_AVATAR_CONFIG: AvatarRigConfig = {
   },
   attachments: FEMALE_ATTACHMENTS,
   pivots: FEMALE_PIVOTS,
+  // female_body_lying reclines at her own angle, independently measured
+  // and confirmed against the real render — a genuinely different pose
+  // from the male's (legs bent up rather than extended in a straight
+  // diagonal), not a mirrored copy of his.
+  lyingHeadRotation: -0.55,
 }
 
 export const AVATAR_CONFIGS = {

@@ -43,7 +43,7 @@ beforeEach(() => {
 })
 
 describe('CoupleHomePage', () => {
-  it('exposes a working entry into Watch Together', async () => {
+  it('exposes a working entry into Watch Together through the left menu, not a page-level button', async () => {
     const onOpenWatch = vi.fn()
     const user = userEvent.setup()
 
@@ -57,9 +57,18 @@ describe('CoupleHomePage', () => {
       </AuthProvider>,
     )
 
-    const button = await screen.findByRole('button', { name: 'Start Watching' })
-    await user.click(button)
+    // The old always-visible fallback button is gone — Watch Together now
+    // lives behind the hamburger menu (see CoupleHomeSidebar.tsx).
+    expect(screen.queryByRole('button', { name: 'Start Watching' })).not.toBeInTheDocument()
+
+    const menuToggle = await screen.findByRole('button', { name: 'Open menu' })
+    await user.click(menuToggle)
+
+    const watchTogether = await screen.findByRole('button', { name: 'Watch Together' })
+    await user.click(watchTogether)
 
     expect(onOpenWatch).toHaveBeenCalledOnce()
+    // Selecting it closes the drawer again.
+    expect(screen.queryByRole('button', { name: 'Watch Together' })).not.toBeInTheDocument()
   })
 })

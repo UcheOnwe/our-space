@@ -1,9 +1,9 @@
-import { Button } from '../components/shared/Button'
 import { AccountSummary } from '../features/auth/AccountSummary'
 import { useAuth } from '../features/auth/AuthContext'
 import { useCouple } from '../features/couples/CoupleContext'
 import { PresenceOverlay } from '../features/presence/PresenceOverlay'
 import { RoomCanvas } from '../features/room/RoomCanvas'
+import { CoupleHomeSidebar } from './CoupleHomeSidebar'
 import styles from './CoupleHomePage.module.css'
 
 export function CoupleHomePage({ onOpenWatch }: { onOpenWatch: () => void }) {
@@ -21,6 +21,14 @@ export function CoupleHomePage({ onOpenWatch }: { onOpenWatch: () => void }) {
     // PresenceOverlay.tsx's prop doc for why that has to be explicit.
     <PresenceOverlay fullBleed>
       <div className={styles.page}>
+        {/* The room's TV and this menu's "Watch Together" both invoke the
+            same onOpenWatch callback (see RoomCanvas's onOpenWatch prop and
+            CoupleHomeSidebar's own prop doc) — the room is the primary
+            entry point now; this replaces the old always-visible "Start
+            Watching" button as the accessible fallback path, without a
+            second implementation of the navigation itself. */}
+        <CoupleHomeSidebar onOpenWatch={onOpenWatch} />
+
         <header className={styles.header}>
           <span className={styles.wordmark}>Our Space</span>
           <AccountSummary />
@@ -32,14 +40,6 @@ export function CoupleHomePage({ onOpenWatch }: { onOpenWatch: () => void }) {
         </div>
 
         <RoomCanvas onOpenWatch={onOpenWatch} />
-
-        {/* The room's TV is now the graphical entry point to Watch Together
-            (see RoomCanvas's onOpenWatch prop) — this button is the
-            required accessible fallback path, invoking the exact same
-            onOpenWatch callback rather than a second implementation. */}
-        <Button onClick={onOpenWatch} className={styles.watchTogetherButton}>
-          Start Watching
-        </Button>
       </div>
     </PresenceOverlay>
   )

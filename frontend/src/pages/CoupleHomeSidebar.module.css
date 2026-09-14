@@ -1,0 +1,121 @@
+/* Circular hamburger toggle — sits in CoupleHomePage's own header (normal
+   flow), styled with the same soft/cream/olive language as Button/Card
+   rather than a default browser button, so it reads as part of Our Space. */
+.menuButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.menuButton:hover {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+}
+
+.hamburgerIcon {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 18px;
+}
+
+.hamburgerIcon span {
+  display: block;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+/* The sliding drawer itself is the one fixed-position piece — it needs to
+   overlay the whole page (header included), not just sit inside it. Sized
+   narrow and un-backdropped on purpose: "do not block the full room
+   unnecessarily" ruled out a full-screen scrim. */
+.drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(260px, 80vw);
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  transform: translateX(-100%);
+  transition: transform 0.25s ease;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+}
+
+.drawerOpen {
+  transform: translateX(0);
+}
+
+.drawerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.drawerTitle {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.closeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.closeButton:hover {
+  background: var(--accent-bg);
+}
+
+.menuList {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.menuItem {
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-h);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.menuItem:hover {
+  background: var(--accent-secondary-bg);
+}

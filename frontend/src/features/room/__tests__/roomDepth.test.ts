@@ -1,6 +1,6 @@
 import { Container } from 'pixi.js'
 import { describe, expect, it } from 'vitest'
-import { syncFloorDepth } from '../roomDepth'
+import { computeAvatarDepthKey, syncFloorDepth } from '../roomDepth'
 
 describe('syncFloorDepth', () => {
   it("sets the entity's zIndex to the given floor Y", () => {
@@ -56,5 +56,51 @@ describe('PixiJS sortableChildren + zIndex (the mechanism this module relies on)
     syncFloorDepth({ container: avatar }, 900)
     parent.sortChildren()
     expect(parent.children.indexOf(avatar)).toBeGreaterThan(parent.children.indexOf(lamp))
+  })
+})
+
+describe('computeAvatarDepthKey', () => {
+  it('returns the plain floor Y unchanged while standing', () => {
+    expect(computeAvatarDepthKey(700, 'standing', 'male')).toBe(700)
+    expect(computeAvatarDepthKey(700, 'standing', 'female')).toBe(700)
+  })
+
+  it('returns the plain floor Y unchanged while sitting', () => {
+    expect(computeAvatarDepthKey(615, 'sitting', 'male')).toBe(615)
+    expect(computeAvatarDepthKey(615, 'sitting', 'female')).toBe(615)
+  })
+
+  it('nudges the female forward and the male back when lying, at the SAME floor Y', () => {
+    const floorY = 350
+    const maleDepth = computeAvatarDepthKey(floorY, 'lying', 'male')
+    const femaleDepth = computeAvatarDepthKey(floorY, 'lying', 'female')
+
+    // The locked V1 convention: female renders above/in front of male
+    // where their sprites overlap on the bed.
+    expect(femaleDepth).toBeGreaterThan(maleDepth)
+  })
+
+  it('keeps the lying nudge small enough to never override a genuinely different floor Y elsewhere in the room', () => {
+    const bedFemaleDepth = computeAvatarDepthKey(350, 'lying', 'female')
+    const standingElsewhereDepth = computeAvatarDepthKey(351, 'standing', 'male')
+    // Even a 1-unit-larger real floor Y (an entirely different position)
+    // must still sort after the bed — the lying bias is a tie-break for
+    // an EXACT overlap, not a means of skipping the queue generally.
+    expect(standingElsewhereDepth).toBeGreaterThan(bedFemaleDepth)
+  })
+
+  it('produces the correct front-to-back draw order when both are lying at the identical bed position', () => {
+    const parent = new Container()
+    parent.sortableChildren = true
+    const male = new Container({ label: 'avatar-male' })
+    const female = new Container({ label: 'avatar-female' })
+    parent.addChild(male, female)
+
+    const bedFloorY = 350
+    syncFloorDepth({ container: male }, computeAvatarDepthKey(bedFloorY, 'lying', 'male'))
+    syncFloorDepth({ container: female }, computeAvatarDepthKey(bedFloorY, 'lying', 'female'))
+    parent.sortChildren()
+
+    expect(parent.children.indexOf(female)).toBeGreaterThan(parent.children.indexOf(male))
   })
 })

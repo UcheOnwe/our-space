@@ -2,7 +2,13 @@ import { Sprite, Texture, TextureSource } from 'pixi.js'
 import { describe, expect, it } from 'vitest'
 import { AvatarRig } from '../AvatarRig'
 import type { AvatarTextures } from '../AvatarRig'
-import { FEMALE_AVATAR_CONFIG, MALE_AVATAR_CONFIG } from '../avatarConfigs'
+import {
+  FEMALE_AVATAR_CONFIG,
+  LYING_HEAD_SCALE,
+  MALE_AVATAR_CONFIG,
+  SITTING_HEAD_SCALE,
+  STANDING_HEAD_SCALE,
+} from '../avatarConfigs'
 
 const FAKE_BASE_SCALE = 1
 
@@ -198,9 +204,10 @@ describe('AvatarRig', () => {
       expect(sittingHeadPosition.y).not.toBeCloseTo(standingHeadPosition.y)
     })
 
-    it('lying swaps to the whole reclining illustration, hides every limb, and hides the head', () => {
+    it('lying swaps to the whole reclining illustration, hides every limb, and shows the head at the lying attachment/rotation', () => {
       const textures = fakeTextures()
       const rig = new AvatarRig(MALE_AVATAR_CONFIG, textures, FAKE_BASE_SCALE)
+      const standingHeadRotation = findByLabel(rig, 'head').rotation
 
       rig.setPose('lying')
 
@@ -209,10 +216,34 @@ describe('AvatarRig', () => {
       for (const label of ['left-arm', 'right-arm', 'left-leg', 'right-leg']) {
         expect(findByLabel(rig, label).visible).toBe(false)
       }
-      expect(findByLabel(rig, 'head').visible).toBe(false)
+      expect(findByLabel(rig, 'head').visible).toBe(true)
+      // Regression guard for "head visibly detached from the lying body" —
+      // the head must actually rotate to match the reclined pose, not
+      // just move while staying upright.
+      expect(findByLabel(rig, 'head').rotation).not.toBeCloseTo(standingHeadRotation)
+      expect(findByLabel(rig, 'head').rotation).toBeCloseTo(MALE_AVATAR_CONFIG.lyingHeadRotation as number)
     })
 
-    it('returning to standing restores the standing body texture, limb visibility, and neck attachment', () => {
+    it("re-attaches the head at the lying body's OWN neck point, not the standing one", () => {
+      // male_body_lying isn't cropped to the same canvas as
+      // male_body_base — reproduced here with two differently-sized fake
+      // textures, so a stale (pre-swap) attachment fraction would visibly
+      // disagree with the correct one, the same regression guard the
+      // sitting-pose test above already has.
+      const textures = fakeTextures(new Texture({ source: new TextureSource({ width: 300, height: 400 }) }))
+      textures.bodyLying = new Texture({ source: new TextureSource({ width: 500, height: 200 }) })
+      const rig = new AvatarRig(MALE_AVATAR_CONFIG, textures, FAKE_BASE_SCALE)
+      const headBefore = findByLabel(rig, 'head').position
+      const standingHeadPosition = { x: headBefore.x, y: headBefore.y }
+
+      rig.setPose('lying')
+
+      const lyingHeadPosition = findByLabel(rig, 'head').position
+      expect(lyingHeadPosition.x).not.toBeCloseTo(standingHeadPosition.x)
+      expect(lyingHeadPosition.y).not.toBeCloseTo(standingHeadPosition.y)
+    })
+
+    it('returning to standing restores the standing body texture, limb visibility, upright head rotation, and neck attachment', () => {
       const textures = fakeTextures()
       const rig = new AvatarRig(MALE_AVATAR_CONFIG, textures, FAKE_BASE_SCALE)
       const headBefore = findByLabel(rig, 'head').position
@@ -224,6 +255,7 @@ describe('AvatarRig', () => {
       expect(rig.getPose()).toBe('standing')
       expect(findByLabel(rig, 'body').texture).toBe(textures.bodyBase)
       expect(findByLabel(rig, 'head').visible).toBe(true)
+      expect(findByLabel(rig, 'head').rotation).toBe(0)
       expect(findByLabel(rig, 'head').position.x).toBeCloseTo(standingHeadPosition.x)
       expect(findByLabel(rig, 'head').position.y).toBeCloseTo(standingHeadPosition.y)
       for (const label of ['left-arm', 'right-arm', 'left-leg', 'right-leg']) {
@@ -243,6 +275,88 @@ describe('AvatarRig', () => {
       expect(rig.getPose()).toBe('sitting')
       expect(findByLabel(rig, 'head').position.x).toBeCloseTo(positionBefore.x)
       expect(findByLabel(rig, 'head').position.y).toBeCloseTo(positionBefore.y)
+    })
+  })
+
+  describe('setVisible', () => {
+    it('starts visible', () => {
+      const rig = new AvatarRig(MALE_AVATAR_CONFIG, fakeTextures(), FAKE_BASE_SCALE)
+      expect(rig.container.visible).toBe(true)
+    })
+
+    it('hides and restores the whole assembled container (for CoupleHugCoordinator)', () => {
+      const rig = new AvatarRig(MALE_AVATAR_CONFIG, fakeTextures(), FAKE_BASE_SCALE)
+
+      rig.setVisible(false)
+      expect(rig.container.visible).toBe(false)
+
+      rig.setVisible(true)
+      expect(rig.container.visible).toBe(true)
+    })
+  })
+
+  describe('head scale (per-pose, restored standing/sitting size)', () => {
+    it('renders standing at STANDING_HEAD_SCALE, never touching the body/limbs or the container', () => {
+      const rig = new AvatarRig(MALE_AVATAR_CONFIG, fakeTextures(), FAKE_BASE_SCALE)
+
+      const head = findByLabel(rig, 'head')
+      expect(head.scale.x).toBeCloseTo(STANDING_HEAD_SCALE)
+      expect(head.scale.y).toBeCloseTo(STANDING_HEAD_SCALE)
+
+      // The container's own scale (baseScale * relativeScale) and every
+      // other sprite must be completely unaffected — this is a head-only
+      // setting, not a rig-wide one.
+      expect(rig.container.scale.x).toBeCloseTo(FAKE_BASE_SCALE * MALE_AVATAR_CONFIG.relativeScale)
+      for (const label of ['body', 'left-arm', 'right-arm']) {
+        expect(Math.abs(findByLabel(rig, label).scale.x)).toBeCloseTo(1)
+      }
+    })
+
+    it('keeps the standing head scale identical for both characters — this is a proportion setting, not a male/female difference', () => {
+      const maleHead = findByLabel(new AvatarRig(MALE_AVATAR_CONFIG, fakeTextures(), FAKE_BASE_SCALE), 'head')
+      const femaleHead = findByLabel(new AvatarRig(FEMALE_AVATAR_CONFIG, fakeTextures(), FAKE_BASE_SCALE), 'head')
+      expect(maleHead.scale.x).toBeCloseTo(femaleHead.scale.x)
+    })
+
+    it('preserves the approved male:female relative scale ratio (head scale must not touch it)', () => {
+      const maleRig = new AvatarRig(MALE_AVATAR_CONFIG, fakeTextures(), FAKE_BASE_SCALE)
+      const femaleRig = new AvatarRig(FEMALE_AVATAR_CONFIG, fakeTextures(), FAKE_BASE_SCALE)
+      const ratio = maleRig.container.scale.x / femaleRig.container.scale.x
+      expect(ratio).toBeCloseTo(MALE_AVATAR_CONFIG.relativeScale / FEMALE_AVATAR_CONFIG.relativeScale, 5)
+    })
+
+    // Regression guard for the bug this pass fixes: a single global
+    // multiplier applied to every pose alike meant fixing one pose's head
+    // size silently changed every other pose's too. Each pose now has its
+    // own named constant (avatarConfigs.ts) and must apply exactly that
+    // one, independent of the others.
+    it('applies each pose its own configured head scale independently', () => {
+      const rig = new AvatarRig(MALE_AVATAR_CONFIG, fakeTextures(), FAKE_BASE_SCALE)
+      const head = findByLabel(rig, 'head')
+
+      expect(head.scale.x).toBeCloseTo(STANDING_HEAD_SCALE)
+
+      rig.setPose('sitting')
+      expect(head.scale.x).toBeCloseTo(SITTING_HEAD_SCALE)
+
+      rig.setPose('lying')
+      expect(head.scale.x).toBeCloseTo(LYING_HEAD_SCALE)
+
+      rig.setPose('standing')
+      expect(head.scale.x).toBeCloseTo(STANDING_HEAD_SCALE)
+    })
+
+    it('preserves expression swapping after a pose change', () => {
+      const textures = fakeTextures()
+      const rig = new AvatarRig(MALE_AVATAR_CONFIG, textures, FAKE_BASE_SCALE)
+      const head = findByLabel(rig, 'head')
+
+      rig.setPose('sitting')
+      const scaleBefore = head.scale.x
+      rig.setExpression('sad')
+
+      expect(head.texture).toBe(textures.headSad)
+      expect(head.scale.x).toBeCloseTo(scaleBefore)
     })
   })
 })

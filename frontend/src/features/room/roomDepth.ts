@@ -31,3 +31,27 @@ export interface DepthSortable {
 export function syncFloorDepth(entity: DepthSortable, floorY: number): void {
   entity.container.zIndex = floorY
 }
+
+// Locked V1 visual convention (see the approved plan for the bed-lying
+// interaction): when both avatars lie on the bed at once, they're both
+// positioned at the SAME authored `BED_ACTIVITY_POINTS.pose` (V1 has only
+// one lying spot — see avatarActivities.ts), so their floor Y is
+// IDENTICAL, not just close — an ordinary Y-sort has no natural tie-
+// breaker for that and would fall back to insertion/array order, which
+// isn't a deliberate choice. This nudge is deliberately tiny — far
+// smaller than any real gap between two different floor positions
+// elsewhere in the room — so it can only ever matter in that exact tie,
+// never quietly reorder anything else.
+const FEMALE_OVER_MALE_LYING_BIAS_WORLD_UNITS = 0.5
+
+/**
+ * Computes an avatar's depth-sort key, applying the female-over-male bed
+ * tie-break ONLY while lying (couch/desk-chair sitting and ordinary
+ * standing/walking use the avatar's plain floor Y, unmodified — the
+ * locked convention is specific to sharing the bed). `gender` comes
+ * straight from the avatar's own AvatarRigConfig — see RoomCanvas.tsx.
+ */
+export function computeAvatarDepthKey(floorY: number, pose: 'standing' | 'sitting' | 'lying', gender: 'male' | 'female'): number {
+  if (pose !== 'lying') return floorY
+  return gender === 'female' ? floorY + FEMALE_OVER_MALE_LYING_BIAS_WORLD_UNITS : floorY - FEMALE_OVER_MALE_LYING_BIAS_WORLD_UNITS
+}
