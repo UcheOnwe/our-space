@@ -8,14 +8,27 @@ import { CoupleHomePage } from '../pages/CoupleHomePage'
 import { InviteWaitingPage } from '../pages/InviteWaitingPage'
 import { JoinSpacePage } from '../pages/JoinSpacePage'
 import { WatchTogetherPage } from '../pages/WatchTogetherPage'
+import { PrePairingLayout } from './PrePairingLayout'
 
 /**
  * Routes between the pre-pairing and paired experience based on couple
  * state — the same plain-state approach used throughout (no URL router
  * yet; see the Slice 3 proposal for why that stays a deliberate,
  * revisitable choice rather than an oversight).
+ *
+ * `onOpenCompanionProfile`/`onOpenCompanionSetup` come from AuthGate.tsx,
+ * one level up — threaded through here (never handled locally) so every
+ * couple-status branch below can offer the same entry points into
+ * Companion Profile/setup without this component owning any Companion
+ * state itself.
  */
-export function CoupleGate() {
+export function CoupleGate({
+  onOpenCompanionProfile,
+  onOpenCompanionSetup,
+}: {
+  onOpenCompanionProfile: () => void
+  onOpenCompanionSetup: () => void
+}) {
   const { status } = useCouple()
   const [view, setView] = useState<'choose' | 'join'>('choose')
   const [pairedView, setPairedView] = useState<'home' | 'watch' | 'companion'>('home')
@@ -25,7 +38,11 @@ export function CoupleGate() {
   }
 
   if (status === 'waiting') {
-    return <InviteWaitingPage />
+    return (
+      <PrePairingLayout onOpenCompanionProfile={onOpenCompanionProfile} onOpenCompanionSetup={onOpenCompanionSetup}>
+        <InviteWaitingPage />
+      </PrePairingLayout>
+    )
   }
 
   if (status === 'paired') {
@@ -53,14 +70,22 @@ export function CoupleGate() {
     }
     return (
       <PresenceProvider feature="home">
-        <CoupleHomePage onOpenWatch={() => setPairedView('watch')} onOpenCompanion={() => setPairedView('companion')} />
+        <CoupleHomePage
+          onOpenWatch={() => setPairedView('watch')}
+          onOpenCompanion={() => setPairedView('companion')}
+          onOpenCompanionProfile={onOpenCompanionProfile}
+        />
       </PresenceProvider>
     )
   }
 
-  return view === 'choose' ? (
-    <ChooseActionPage onChooseJoin={() => setView('join')} />
-  ) : (
-    <JoinSpacePage onBack={() => setView('choose')} />
+  return (
+    <PrePairingLayout onOpenCompanionProfile={onOpenCompanionProfile} onOpenCompanionSetup={onOpenCompanionSetup}>
+      {view === 'choose' ? (
+        <ChooseActionPage onChooseJoin={() => setView('join')} />
+      ) : (
+        <JoinSpacePage onBack={() => setView('choose')} />
+      )}
+    </PrePairingLayout>
   )
 }

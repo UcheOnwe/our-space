@@ -87,15 +87,55 @@
 .our-space-companion-bob {
   width: 100%;
   height: 100%;
-  animation: our-space-companion-float 2.6s ease-in-out infinite;
 }
 
-/* Swaps to a snappier bounce while a direction key is actually held —
-   the "slight squash/stretch or motion response" the approved plan asks
-   for, without a second animation system. */
-.our-space-companion--moving .our-space-companion-bob {
+/* Idle-animation presets — one class per registry.ts AnimationPresetId,
+   applied to `.our-space-companion-bob` by companionView.ts's
+   `setCompanion` based on whichever Companion is currently rendered (see
+   registry.ts's own doc comment for why this lives per-runtime rather
+   than being shared code). `our-space-preset-float-drift` reuses the
+   ORIGINAL Cosmic Blob idle animation's exact keyframe values unchanged
+   — this refactor from "one hardcoded animation" to "one class per
+   preset" must never itself change how the Blob moves. */
+.our-space-preset-float-drift {
+  animation: our-space-companion-float 2.6s ease-in-out infinite;
+}
+.our-space-companion--moving .our-space-preset-float-drift {
   animation-name: our-space-companion-bounce;
   animation-duration: 0.5s;
+}
+
+.our-space-preset-soar-glide {
+  animation: our-space-soar-glide 2.6s ease-in-out infinite;
+}
+.our-space-companion--moving .our-space-preset-soar-glide {
+  animation-duration: 0.45s;
+}
+
+.our-space-preset-hover-wobble {
+  animation: our-space-hover-wobble 2.2s ease-in-out infinite;
+}
+.our-space-companion--moving .our-space-preset-hover-wobble {
+  animation-duration: 0.4s;
+}
+
+.our-space-preset-twinkle-dart {
+  animation: our-space-twinkle-dart 2.8s ease-in-out infinite;
+}
+.our-space-companion--moving .our-space-preset-twinkle-dart {
+  animation-duration: 0.5s;
+}
+
+/* Nova Guardian's own idle hover — a gentle bob on the WHOLE character.
+   While actually flying, direction-driven posing (companionView.ts's
+   `setDirectionalPose`, applied to the inner `[data-pose-part]` groups)
+   is what moves it instead — this outer idle bob is paused rather than
+   layered on top, so the two motions never fight each other. */
+.our-space-preset-hero-hover {
+  animation: our-space-hero-hover 3s ease-in-out infinite;
+}
+.our-space-companion--moving .our-space-preset-hero-hover {
+  animation-play-state: paused;
 }
 
 @keyframes our-space-companion-float {
@@ -115,6 +155,50 @@
   }
   50% {
     transform: translateY(-3px) scale(1.05, 0.95);
+  }
+}
+
+@keyframes our-space-soar-glide {
+  0%,
+  100% {
+    transform: translate(-6px, 3px) rotate(-6deg);
+  }
+  50% {
+    transform: translate(6px, -4px) rotate(6deg);
+  }
+}
+
+@keyframes our-space-hover-wobble {
+  0%,
+  100% {
+    transform: rotate(-6deg);
+  }
+  50% {
+    transform: rotate(6deg);
+  }
+}
+
+@keyframes our-space-twinkle-dart {
+  0%,
+  60%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  15% {
+    transform: translate(5px, -3px) scale(1.06);
+  }
+  30% {
+    transform: translate(-4px, 3px) scale(0.95);
+  }
+}
+
+@keyframes our-space-hero-hover {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-3px) rotate(-2deg);
   }
 }
 
@@ -145,6 +229,149 @@
    focusMode.ts). */
 .our-space-companion--focus-hidden {
   display: none;
+}
+
+/* ---------------------------------------------------------------------
+   Nova Guardian
+   ---------------------------------------------------------------------
+   companionView.ts's setDirectionalPose writes inline `transform` styles
+   directly onto .nova-guardian-mirror/-bank/-lead-arm/-trail-arm/-cape/
+   -wake every animation frame (it has to track a continuously-changing
+   angle, not loop through a fixed keyframe) — everything below is
+   either (a) a CSS transition that smooths those inline-style CHANGES,
+   or (b) presentation that has no reason to know the actual travel
+   angle (idle sway, blink, speed-line opacity). Neither ever fights the
+   inline styles, since nothing here sets `transform` on the SAME element
+   JS writes to — see .nova-guardian-cape-inner/-wake-inner below, the
+   same "outer JS transform, inner CSS animation" split
+   .our-space-companion-flip/-bob already uses for every other
+   Companion. */
+
+.nova-guardian-mirror,
+.nova-guardian-bank,
+.nova-guardian-lead-arm,
+.nova-guardian-trail-arm,
+.nova-guardian-cape,
+.nova-guardian-wake {
+  transition: transform 0.18s ease-out;
+}
+
+/* ---- Legs / body — per-pose-mode presentation only ----
+   companionView.ts sets `data-pose-mode` on .nova-guardian-body to
+   "idle" | "side" | "vertical-up" | "vertical-down" (see
+   novaGuardianPose.ts). These rules are what give 'side' and the two
+   'vertical' modes a genuinely different silhouette from idle WITHOUT
+   redrawing the character or reassigning which limb is which — legs
+   trail behind for the side pose; the whole body gets a small stretch
+   toward the travel axis for the vertical poses, approximating the more
+   foreshortened "diving/climbing" reference art without literally
+   relocating anatomy (which would read as broken/detached — see
+   companionShapes.ts's own doc comment). */
+.nova-guardian-legs {
+  transition: transform 0.18s ease-out;
+  transform-box: fill-box;
+  transform-origin: 50% 0%;
+}
+.nova-guardian-body[data-pose-mode='side'] .nova-guardian-legs {
+  transform: rotate(-55deg);
+}
+.nova-guardian-body[data-pose-mode='vertical-up'] .nova-guardian-legs {
+  transform: translateY(-3px) scaleY(0.85);
+}
+.nova-guardian-body[data-pose-mode='vertical-down'] .nova-guardian-legs {
+  transform: translateY(3px) scaleY(0.85);
+}
+
+.nova-guardian-body {
+  transition: transform 0.18s ease-out;
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+/* A small stretch along the travel axis — a classic lightweight "motion"
+   cue (see .our-space-preset-soar-glide's own scale use elsewhere in
+   this file) standing in for true foreshortening. */
+.nova-guardian-body[data-pose-mode='vertical-up'] {
+  transform: scaleY(1.08) translateY(-1px);
+}
+.nova-guardian-body[data-pose-mode='vertical-down'] {
+  transform: scaleY(1.08) translateY(1px);
+}
+
+/* ---- Cape ----
+   The OUTER .nova-guardian-cape group is what companionView.ts rotates
+   toward `trailDirection` while flying (cleared back to '' at idle, so
+   this transition eases that outer rotation smoothly). The INNER
+   .nova-guardian-cape-inner is CSS-only and NEVER touched by JS — it
+   supplies the idle drape sway AND the flying secondary flutter, fully
+   independent of whatever the outer group's current base rotation is,
+   exactly like .our-space-companion-flip wraps .our-space-companion-bob
+   for every other Companion. */
+.nova-guardian-cape-inner {
+  transform-box: fill-box;
+  transform-origin: 50% 0%;
+  animation: nova-guardian-cape-idle-sway 3.2s ease-in-out infinite;
+}
+.our-space-companion--moving .nova-guardian-cape-inner {
+  animation-name: nova-guardian-cape-flying-flutter;
+  animation-duration: 0.45s;
+}
+@keyframes nova-guardian-cape-idle-sway {
+  0%,
+  100% {
+    transform: rotate(-3deg) scaleY(1);
+  }
+  50% {
+    transform: rotate(3deg) scaleY(1.02);
+  }
+}
+@keyframes nova-guardian-cape-flying-flutter {
+  0%,
+  100% {
+    transform: rotate(-8deg) scaleY(1.04);
+  }
+  50% {
+    transform: rotate(9deg) scaleY(0.97);
+  }
+}
+
+/* ---- Movement wake ----
+   Cartoon speed-line effect — "should LOOK fast" without actually moving
+   faster (the movement engine's own speed constant is untouched — see
+   companionMovement.ts). The streak lines' own opacity="0" is a plain
+   SVG presentation attribute (the lowest-priority layer of the cascade),
+   so this ordinary class rule overrides it with no !important needed.
+   companionView.ts rotates the OUTER .nova-guardian-wake group toward
+   `trailDirection`, exactly like the cape; this pulse only touches
+   opacity, never `transform`, so it can safely live on the same element. */
+.our-space-companion--moving .nova-guardian-speed-streak {
+  opacity: 0.6;
+  animation: nova-guardian-streak-pulse 0.3s ease-in-out infinite;
+}
+@keyframes nova-guardian-streak-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Restrained chest-crystal glow — subtle, per the approved plan's own
+   "keep it restrained." */
+.nova-guardian-crystal {
+  animation: nova-guardian-crystal-pulse 2.8s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+@keyframes nova-guardian-crystal-pulse {
+  0%,
+  100% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 /* ---------------------------------------------------------------------

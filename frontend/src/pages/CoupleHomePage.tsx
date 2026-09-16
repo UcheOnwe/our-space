@@ -9,9 +9,11 @@ import styles from './CoupleHomePage.module.css'
 export function CoupleHomePage({
   onOpenWatch,
   onOpenCompanion,
+  onOpenCompanionProfile,
 }: {
   onOpenWatch: () => void
   onOpenCompanion: () => void
+  onOpenCompanionProfile: () => void
 }) {
   const { user } = useAuth()
   const { couple } = useCouple()
@@ -33,7 +35,11 @@ export function CoupleHomePage({
             entry point now; this replaces the old always-visible "Start
             Watching" button as the accessible fallback path, without a
             second implementation of the navigation itself. */}
-        <CoupleHomeSidebar onOpenWatch={onOpenWatch} onOpenCompanion={onOpenCompanion} />
+        <CoupleHomeSidebar
+          onOpenWatch={onOpenWatch}
+          onOpenCompanion={onOpenCompanion}
+          onOpenCompanionProfile={onOpenCompanionProfile}
+        />
 
         <header className={styles.header}>
           <span className={styles.wordmark}>Our Space</span>

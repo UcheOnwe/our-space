@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "couples",
     "watch",
     "presence",
+    "companions",
 ]
 
 MIDDLEWARE = [
