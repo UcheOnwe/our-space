@@ -38,13 +38,12 @@ function CopyableChromeUrl() {
   )
 }
 
-/** The same small cosmic-blob silhouette the extension itself renders (see
- * frontend/src/extension/companionView.ts's COMPANION_SVG) — kept as its
- * own separate copy here rather than shared at runtime, since this page
- * and the content script are two completely different bundles/documents
- * with no shared code path (see vite.extension.config.ts). Purely
- * decorative here, so it's inlined directly rather than given its own
- * component file. */
+/** A small cosmic-blob-styled silhouette for this setup page's own decorative
+ * hero — purely illustrative here, so it's a standalone inline copy rather
+ * than pulling in the real shared Companion registry
+ * (frontend/src/companions/registry.ts) just to draw one static preview
+ * image. The Companion Profile page (features/companions/) is what
+ * actually renders the real, registry-driven, customizable Companion. */
 function CompanionPreview() {
   return (
     <svg viewBox="0 0 64 64" width="72" height="72" aria-hidden="true" className={styles.previewSvg}>

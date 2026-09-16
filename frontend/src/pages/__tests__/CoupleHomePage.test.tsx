@@ -51,7 +51,7 @@ describe('CoupleHomePage', () => {
       <AuthProvider>
         <CoupleProvider>
           <PresenceProvider feature="home">
-            <CoupleHomePage onOpenWatch={onOpenWatch} onOpenCompanion={vi.fn()} />
+            <CoupleHomePage onOpenWatch={onOpenWatch} onOpenCompanion={vi.fn()} onOpenCompanionProfile={vi.fn()} />
           </PresenceProvider>
         </CoupleProvider>
       </AuthProvider>,
@@ -80,7 +80,7 @@ describe('CoupleHomePage', () => {
       <AuthProvider>
         <CoupleProvider>
           <PresenceProvider feature="home">
-            <CoupleHomePage onOpenWatch={vi.fn()} onOpenCompanion={onOpenCompanion} />
+            <CoupleHomePage onOpenWatch={vi.fn()} onOpenCompanion={onOpenCompanion} onOpenCompanionProfile={vi.fn()} />
           </PresenceProvider>
         </CoupleProvider>
       </AuthProvider>,

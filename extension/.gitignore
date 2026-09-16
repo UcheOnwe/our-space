@@ -1,5 +1,8 @@
-# Built by `npm run build:extension` (see frontend/vite.extension.config.ts)
-# from frontend/src/extension/ — generated, not source. Run the build
-# before loading this directory as an unpacked extension.
+# Built by `npm run build:extension` (see frontend/vite.extension.config.ts
+# and frontend/vite.extension.bridge.config.ts) from frontend/src/extension/
+# — generated, not source. Run the build before loading this directory as
+# an unpacked extension.
 content-script.js
 content-script.js.map
+web-bridge.js
+web-bridge.js.map

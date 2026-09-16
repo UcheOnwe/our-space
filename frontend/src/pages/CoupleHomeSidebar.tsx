@@ -13,6 +13,13 @@ interface CoupleHomeSidebarProps {
    * this app has no URL router, so this is that convention's second use,
    * not a new one. */
   onOpenCompanion: () => void
+  /** Opens Companion Profile (CompanionProfilePage) — the customization
+   * page, distinct from `onOpenCompanion` above (extension install
+   * instructions). Passed all the way down from AuthGate.tsx, since
+   * Companion Profile lives ABOVE CoupleGate/CoupleProvider entirely
+   * (see AuthGate.tsx's own doc comment) — this sidebar just forwards it,
+   * the same as every other callback here. */
+  onOpenCompanionProfile: () => void
 }
 
 /**
@@ -30,7 +37,11 @@ interface CoupleHomeSidebarProps {
  * slice can add Music/Games/Move-Fitness/Memories/Settings as more list
  * items without restructuring this component.
  */
-export function CoupleHomeSidebar({ onOpenWatch, onOpenCompanion }: CoupleHomeSidebarProps) {
+export function CoupleHomeSidebar({
+  onOpenWatch,
+  onOpenCompanion,
+  onOpenCompanionProfile,
+}: CoupleHomeSidebarProps) {
   const [isOpen, setIsOpen] = useState(false)
   const drawerId = useId()
 
@@ -56,6 +67,11 @@ export function CoupleHomeSidebar({ onOpenWatch, onOpenCompanion }: CoupleHomeSi
 
   function handleCompanion() {
     onOpenCompanion()
+    setIsOpen(false)
+  }
+
+  function handleCompanionProfile() {
+    onOpenCompanionProfile()
     setIsOpen(false)
   }
 
@@ -104,6 +120,11 @@ export function CoupleHomeSidebar({ onOpenWatch, onOpenCompanion }: CoupleHomeSi
           <li>
             <button type="button" className={styles.menuItem} onClick={handleCompanion}>
               Space Companion
+            </button>
+          </li>
+          <li>
+            <button type="button" className={styles.menuItem} onClick={handleCompanionProfile}>
+              Companion Profile
             </button>
           </li>
         </ul>

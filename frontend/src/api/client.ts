@@ -51,7 +51,7 @@ function extractErrorMessage(body: unknown): string {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST'
+  method?: 'GET' | 'POST' | 'PATCH'
   body?: unknown
 }
 
@@ -95,4 +95,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 export const apiClient = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body }),
+  // Added for the Companion Profile singleton resource (GET/PATCH
+  // /api/companions/profile/) — every other domain in this app so far
+  // only ever needed GET/POST action-style endpoints.
+  patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
 }

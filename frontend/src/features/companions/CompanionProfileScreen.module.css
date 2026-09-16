@@ -1,0 +1,310 @@
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.previewPanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 40px 20px;
+  border-radius: calc(var(--radius) + 8px);
+  background:
+    radial-gradient(circle at 25% 30%, rgba(201, 143, 138, 0.22), transparent 45%),
+    radial-gradient(circle at 75% 25%, rgba(122, 132, 80, 0.2), transparent 45%),
+    var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  /* Room for the idle-personality animations below to move within
+     without ever clipping against the panel's own edge. */
+  overflow: visible;
+}
+
+.previewCreature {
+  width: 160px;
+  height: 160px;
+  filter: drop-shadow(0 10px 20px rgba(46, 44, 40, 0.2));
+}
+
+.previewName {
+  margin: 12px 0 0;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--text-h);
+}
+
+.previewDescription {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+  text-align: center;
+  max-width: 32ch;
+}
+
+/* Each Companion's own simple, distinct idle-movement personality — see
+   registry.ts's AnimationPresetId. Deliberately small/subtle motion:
+   this is a live preview, not a game viewport. */
+.float-drift {
+  animation: float-drift 3.2s ease-in-out infinite;
+}
+.soar-glide {
+  animation: soar-glide 2.6s ease-in-out infinite;
+}
+.hover-wobble {
+  animation: hover-wobble 2.2s ease-in-out infinite;
+}
+.twinkle-dart {
+  animation: twinkle-dart 2.8s ease-in-out infinite;
+}
+.hero-hover {
+  animation: hero-hover 3s ease-in-out infinite;
+}
+
+@keyframes float-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate(6px, -12px) rotate(-3deg);
+  }
+}
+
+@keyframes soar-glide {
+  0%,
+  100% {
+    transform: translate(-12px, 6px) rotate(-8deg);
+  }
+  50% {
+    transform: translate(12px, -8px) rotate(8deg);
+  }
+}
+
+@keyframes hover-wobble {
+  0%,
+  100% {
+    transform: rotate(-6deg);
+  }
+  50% {
+    transform: rotate(6deg);
+  }
+}
+
+@keyframes twinkle-dart {
+  0%,
+  60%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  15% {
+    transform: translate(10px, -6px) scale(1.08);
+  }
+  30% {
+    transform: translate(-8px, 5px) scale(0.94);
+  }
+}
+
+/* Nova Guardian's own idle personality: "upright or lightly hovering...
+   subtle breathing/hover motion" — a small vertical hover with a very
+   slight lean, distinct from the other four presets above. */
+@keyframes hero-hover {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(-2deg);
+  }
+}
+
+/* Global (unscoped) rules below — these target class names written into
+   the SHARED registry's own SVG markup strings (companionShapes.ts),
+   injected via dangerouslySetInnerHTML, not through this file's own
+   scoped JSX classNames. CSS Modules hashes every plain selector in this
+   file by default, which would silently stop matching those literal
+   class names — :global() is the standard escape hatch for exactly this
+   "style content injected as an HTML string" situation. */
+
+/* The original Cosmic Blob's blink — the SAME class names and keyframe
+   shape the extension's content-script.css defines, so the Companion
+   Profile preview and the YouTube overlay demonstrably share the same
+   "living" identity, not just the same silhouette. */
+:global(.our-space-companion-eye) {
+  animation: our-space-companion-blink 6s ease-in-out infinite;
+  transform-origin: center;
+}
+:global(.our-space-companion-eye--right) {
+  animation-delay: 0.05s;
+}
+@keyframes our-space-companion-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  96% {
+    transform: scaleY(0.1);
+  }
+}
+
+/* Nova Guardian's cape — gentle continuous drape sway, "visually alive
+   but not noisy" even at idle (this preview never enters a "flying"
+   state — no keyboard movement here — unlike the extension overlay, so
+   only the idle sway is relevant; see novaGuardianPose.ts). Targets the
+   INNER child, never the outer `.nova-guardian-cape` group itself — the
+   extension's content-script.css rotates that outer group directly via
+   JS while flying, and this same markup/CSS pairing is shared between
+   both runtimes, so keeping the idle animation off the JS-owned element
+   here too is what keeps the two truly identical rather than
+   coincidentally similar. */
+:global(.nova-guardian-cape-inner) {
+  animation: nova-guardian-cape-idle-sway 3.2s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: 50% 0%;
+}
+@keyframes nova-guardian-cape-idle-sway {
+  0%,
+  100% {
+    transform: rotate(-3deg) scaleY(1);
+  }
+  50% {
+    transform: rotate(3deg) scaleY(1.02);
+  }
+}
+
+/* Restrained chest-crystal glow — subtle, per the approved plan's own
+   "keep it restrained." */
+:global(.nova-guardian-crystal) {
+  animation: nova-guardian-crystal-pulse 2.8s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+@keyframes nova-guardian-crystal-pulse {
+  0%,
+  100% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.section h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.companionGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.companionCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  padding: 16px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.1s ease;
+}
+
+.companionCard:hover {
+  border-color: var(--accent);
+}
+
+.companionCardSelected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-border);
+}
+
+.companionCardIcon {
+  width: 56px;
+  height: 56px;
+}
+
+.companionCardName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.equippedBadge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--accent-secondary);
+  background: var(--accent-secondary-bg);
+  border-radius: 999px;
+  padding: 2px 7px;
+}
+
+.swatchRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.swatch {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.swatchSelected {
+  border-color: var(--text-h);
+  box-shadow: 0 0 0 2px var(--accent-border);
+}
+
+.swatchEquippedDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bg);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.saveButton {
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.saveButton:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.saveButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.upToDateNote {
+  font-size: 13px;
+  color: var(--text);
+}
