@@ -24,4 +24,5 @@ urlpatterns = [
     path('api/watch/', include('watch.urls')),
     path('api/companions/', include('companions.urls')),
     path('api/uchem/', include('uchem.urls')),
+    path('api/rooms/', include('rooms.urls')),
 ]
