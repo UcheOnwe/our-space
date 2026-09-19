@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "presence",
     "companions",
     "uchem",
+    "rooms",
 ]
 
 MIDDLEWARE = [
