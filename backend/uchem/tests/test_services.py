@@ -7,6 +7,7 @@ from django.test import TestCase, TransactionTestCase
 from couples.services import create_couple_with_invite, join_couple
 from uchem.models import CoupleWallet, PersonalWallet, TransactionReason, UchemTransaction
 from uchem.services import (
+    DEV_UCHEM_RESTORE_TARGET,
     InsufficientUchemError,
     credit_couple_wallet,
     credit_personal_wallet,
@@ -14,6 +15,7 @@ from uchem.services import (
     debit_personal_wallet,
     get_or_create_couple_wallet,
     get_or_create_personal_wallet,
+    restore_couple_wallet_for_development,
 )
 
 User = get_user_model()
@@ -396,3 +398,98 @@ class PersonalWalletConcurrencyTests(TransactionTestCase):
         # Exactly one of the two wallets actually received the credit.
         self.assertEqual(sorted([balance_a, balance_b]), [0, 50])
         self.assertEqual(UchemTransaction.objects.filter(idempotency_key="cross-wallet-shared-key").count(), 1)
+
+
+class RestoreCoupleWalletForDevelopmentTests(TestCase):
+    def test_restores_a_zero_balance_to_the_target(self):
+        _, _, couple = make_paired_couple()
+
+        wallet = restore_couple_wallet_for_development(couple)
+
+        self.assertEqual(wallet.balance, DEV_UCHEM_RESTORE_TARGET)
+
+    def test_credits_only_the_shortfall_from_a_partial_balance(self):
+        _, _, couple = make_paired_couple()
+        credit_couple_wallet(couple, 7500, TransactionReason.COUPLE_CONTRIBUTION, "seed")
+
+        wallet = restore_couple_wallet_for_development(couple)
+
+        self.assertEqual(wallet.balance, DEV_UCHEM_RESTORE_TARGET)
+        entry = UchemTransaction.objects.get(reason=TransactionReason.DEV_TEST_CREDIT)
+        self.assertEqual(entry.amount, 2500)
+
+    def test_a_balance_already_at_the_target_is_untouched(self):
+        _, _, couple = make_paired_couple()
+        credit_couple_wallet(couple, DEV_UCHEM_RESTORE_TARGET, TransactionReason.COUPLE_CONTRIBUTION, "seed")
+
+        wallet = restore_couple_wallet_for_development(couple)
+
+        self.assertEqual(wallet.balance, DEV_UCHEM_RESTORE_TARGET)
+        # No dev-credit ledger row at all — a genuine no-op, not a zero-amount credit.
+        self.assertFalse(UchemTransaction.objects.filter(reason=TransactionReason.DEV_TEST_CREDIT).exists())
+
+    def test_a_balance_above_the_target_is_untouched(self):
+        _, _, couple = make_paired_couple()
+        credit_couple_wallet(couple, DEV_UCHEM_RESTORE_TARGET + 500, TransactionReason.COUPLE_CONTRIBUTION, "seed")
+
+        wallet = restore_couple_wallet_for_development(couple)
+
+        self.assertEqual(wallet.balance, DEV_UCHEM_RESTORE_TARGET + 500)
+        self.assertFalse(UchemTransaction.objects.filter(reason=TransactionReason.DEV_TEST_CREDIT).exists())
+
+    def test_never_touches_either_partners_personal_wallet(self):
+        user_a, user_b, couple = make_paired_couple()
+        credit_personal_wallet(user_a, 1500, TransactionReason.WELCOME_REWARD, "a-seed")
+        credit_personal_wallet(user_b, 1000, TransactionReason.WELCOME_REWARD, "b-seed")
+
+        restore_couple_wallet_for_development(couple)
+
+        self.assertEqual(PersonalWallet.objects.get(user=user_a).balance, 1500)
+        self.assertEqual(PersonalWallet.objects.get(user=user_b).balance, 1000)
+
+    def test_is_repeatable_across_separate_restores(self):
+        # The whole point: restoring, spending back down, and restoring
+        # again must work every time — no permanent idempotency key blocks
+        # a later, genuinely separate restore.
+        _, _, couple = make_paired_couple()
+
+        restore_couple_wallet_for_development(couple)
+        debit_couple_wallet(couple, 2500, TransactionReason.ROOM_PURCHASE, "spend-1")
+        wallet = restore_couple_wallet_for_development(couple)
+
+        self.assertEqual(wallet.balance, DEV_UCHEM_RESTORE_TARGET)
+        self.assertEqual(UchemTransaction.objects.filter(reason=TransactionReason.DEV_TEST_CREDIT).count(), 2)
+
+
+class RestoreCoupleWalletForDevelopmentConcurrencyTests(TransactionTestCase):
+    """Proves the wallet lock + shortfall check — not any timing/bucketing
+    — is what prevents two simultaneous restores from overshooting the
+    target, mirroring the exact concurrency-proof pattern already used
+    throughout this app (e.g. PersonalWalletConcurrencyTests above)."""
+
+    def test_two_concurrent_restores_never_exceed_the_target(self):
+        _, _, couple = make_paired_couple()
+        credit_couple_wallet(couple, 7500, TransactionReason.COUPLE_CONTRIBUTION, "seed")
+
+        barrier = threading.Barrier(2)
+
+        def attempt():
+            barrier.wait()
+            try:
+                restore_couple_wallet_for_development(couple)
+            finally:
+                connection.close()
+
+        t1 = threading.Thread(target=attempt)
+        t2 = threading.Thread(target=attempt)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        wallet = CoupleWallet.objects.get(couple=couple)
+        self.assertEqual(wallet.balance, DEV_UCHEM_RESTORE_TARGET)
+        self.assertLessEqual(wallet.balance, DEV_UCHEM_RESTORE_TARGET)
+        # Exactly one credit was actually applied — the second request's
+        # own shortfall check found nothing left to do.
+        self.assertEqual(UchemTransaction.objects.filter(reason=TransactionReason.DEV_TEST_CREDIT).count(), 1)

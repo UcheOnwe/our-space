@@ -16,3 +16,29 @@
     gap: 8px;
   }
 }
+
+/* Fixed white text + a real text-shadow — not theme tokens — since the
+   dark surface this appears on (CoupleHomeNav's photographic backdrop)
+   is always dark regardless of the user's own light/dark theme
+   preference, matching CoupleHomeNav.module.css's own hardcoded
+   `color: white` for the identical reason. */
+.onDark .identity {
+  color: white;
+  font-weight: 600;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+/* Overrides Button's own `.secondary` RESTING colors for this context —
+   a plain element selector (no :global() escape needed, since CSS
+   Modules only hashes class/id selectors), so it reliably beats
+   Button.module.css's own single-class `.secondary` selector regardless
+   of CSS bundle order, without `!important`. Deliberately does NOT touch
+   `:hover` — Button's own `.secondary:hover` rule has higher specificity
+   (class+pseudo-class) than this (class+element), so the existing hover
+   treatment keeps applying completely unmodified; this is a resting-
+   state-only fix, exactly as intended. */
+.onDark button {
+  background: rgba(255, 255, 255, 0.22);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.5);
+}

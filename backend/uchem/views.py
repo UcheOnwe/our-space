@@ -1,10 +1,16 @@
+from django.conf import settings
+from django.http import Http404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from couples.services import get_status_for_user
 
 from .serializers import CoupleWalletSerializer, PersonalWalletSerializer
-from .services import get_or_create_couple_wallet, get_or_create_personal_wallet
+from .services import (
+    get_or_create_couple_wallet,
+    get_or_create_personal_wallet,
+    restore_couple_wallet_for_development,
+)
 
 # No permission_classes set on either view: the project-wide DRF default
 # (IsAuthenticated, see config/settings.py) already applies, and neither
@@ -43,4 +49,37 @@ class CoupleWalletView(APIView):
             return Response({"detail": "You need to be paired with a partner first."}, status=400)
 
         wallet = get_or_create_couple_wallet(couple)
+        return Response(CoupleWalletSerializer(wallet).data)
+
+
+class DevRestoreCoupleWalletView(APIView):
+    """POST /api/uchem/dev/restore/ — DEVELOPMENT ONLY.
+
+    Restores the caller's Couple Wallet toward a fixed 10,000-Uchem
+    testing target — never accepts an amount, couple id, or username from
+    the client; the only input is a testing code, checked against
+    settings.DEV_UCHEM_TEST_CODE (development-configuration-only, never
+    returned by this or any other endpoint).
+
+    This is registered in urls.py ONLY when settings.DEBUG is True — in a
+    real deployment (DEBUG=False) this URL is never added to urlpatterns
+    at all, so the route doesn't exist, not merely reject. The `if not
+    settings.DEBUG` check below is a second, defensive layer for the rare
+    case this view is ever reached some other way (e.g. a future urls.py
+    refactor) — it is not the primary guard.
+    """
+
+    def post(self, request):
+        if not settings.DEBUG:
+            raise Http404
+
+        submitted_code = request.data.get("code")
+        if not settings.DEV_UCHEM_TEST_CODE or submitted_code != settings.DEV_UCHEM_TEST_CODE:
+            return Response({"detail": "Invalid test code."}, status=400)
+
+        pairing_status, couple, _invite = get_status_for_user(request.user)
+        if pairing_status != "paired":
+            return Response({"detail": "You need to be paired with a partner first."}, status=400)
+
+        wallet = restore_couple_wallet_for_development(couple)
         return Response(CoupleWalletSerializer(wallet).data)

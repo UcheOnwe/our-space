@@ -1,42 +1,8 @@
-/* Circular hamburger toggle — sits in CoupleHomePage's own header (normal
-   flow), styled with the same soft/cream/olive language as Button/Card
-   rather than a default browser button, so it reads as part of Our Space. */
-.menuButton {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  background: var(--bg);
-  box-shadow: var(--shadow);
-  cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
-}
-
-.menuButton:hover {
-  background: var(--accent-bg);
-  border-color: var(--accent);
-}
-
-.hamburgerIcon {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-  width: 18px;
-}
-
-.hamburgerIcon span {
-  display: block;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--accent);
-}
-
-/* The sliding drawer itself is the one fixed-position piece — it needs to
+/* The hamburger toggle button that used to live here now lives in
+   CoupleHomeNav (features not pages — see pages/CoupleHomeNav.tsx),
+   which owns the persistent nav bar this drawer is now part of. This
+   file only owns the drawer/menu content itself.
+   The sliding drawer is the one fixed-position piece — it needs to
    overlay the whole page (header included), not just sit inside it. Sized
    narrow and un-backdropped on purpose: "do not block the full room
    unnecessarily" ruled out a full-screen scrim. */
@@ -68,8 +34,34 @@
   border-bottom: 1px solid var(--border);
 }
 
+/* Brings the drawer into the same design language as CoupleHomeNav's own
+   branding lockup (icon + wordmark) rather than a plain text-only title —
+   same Cosmic Blob reference, same font/weight/letter-spacing intent,
+   adapted for this drawer's light background (no text-shadow needed here
+   the way the nav's photographic backdrop requires one). */
+.drawerBrand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drawerBrandIcon {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+.drawerBrandIcon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 .drawerTitle {
-  font-weight: 600;
+  font-family: var(--heading);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.02em;
   color: var(--text-h);
 }
 
@@ -118,4 +110,15 @@
 
 .menuItem:hover {
   background: var(--accent-secondary-bg);
+}
+
+/* Account/logout, mobile-overflow only (CoupleHomeNav's own persistent
+   bar shows AccountSummary inline above the 700px breakpoint — see
+   CoupleHomeNav.module.css's `.desktopOnly`). Pushed to the bottom of
+   the drawer, visually separated, rather than mixed into the
+   destination list above. */
+.accountSection {
+  margin-top: auto;
+  padding: 16px;
+  border-top: 1px solid var(--border);
 }

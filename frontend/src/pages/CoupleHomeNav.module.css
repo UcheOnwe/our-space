@@ -1,0 +1,171 @@
+/* The one persistent bar — fixed to the viewport, not normal page flow,
+   so it survives scroll on Couple Home's deliberately-taller-than-one-
+   viewport desktop layout (see RoomCanvas.module.css's own comment on
+   why that layout exists). z-index above PresenceOverlay's Mouse Spirit
+   layer (z-index: 5) and below the drawer's own (z-index: 100), so
+   opening the drawer still overlays it. */
+.nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  color: white;
+}
+
+.branding {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.brandIcon {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+
+.brandIcon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Cozy/game-like rather than corporate: reuses the app's own --heading
+   token (no new font dependency), a warmer size/weight/letter-spacing
+   than a plain small label, and a soft glow (not a hard outline) to
+   stay legible over the nav's semi-transparent photographic background
+   regardless of what's showing behind it. */
+.brandName {
+  font-family: var(--heading);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.balanceGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.balance {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* Soft muted dusty/blush pink — reuses --accent-secondary verbatim
+   (frontend/src/index.css: "dusty pink — secondary accents, partner
+   highlights"), not a new hot/neon pink token. Only the ✦ glyph and the
+   "Uchem" label take this tint; the NUMBER itself stays full-contrast
+   white so the balance is always the most legible part of this group. */
+.balanceIcon {
+  color: var(--accent-secondary);
+  font-size: 15px;
+}
+
+.balanceNumber {
+  font-weight: 700;
+  color: white;
+}
+
+.balanceLabel {
+  color: var(--accent-secondary);
+  font-weight: 600;
+}
+
+.addUchemButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent-secondary);
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.switchRoomButton {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent);
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.menuButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+}
+
+.hamburgerIcon {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 16px;
+}
+
+.hamburgerIcon span {
+  display: block;
+  height: 2px;
+  border-radius: 1px;
+  background: white;
+}
+
+/* Collapse: below the existing 700px breakpoint (reused, not a new one —
+   matches CoupleHomePage.module.css's own header breakpoint and every
+   other responsive rule in this app), the bar keeps only branding +
+   balance + the hamburger. Switch Room and account/logout move into the
+   drawer instead (see CoupleHomeSidebar.tsx's own additions) rather than
+   overlapping or wrapping awkwardly in a slim bar. */
+@media (max-width: 700px) {
+  .desktopOnly {
+    display: none;
+  }
+
+  .brandName {
+    display: none;
+  }
+}

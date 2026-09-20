@@ -1,15 +1,19 @@
 from django.contrib.auth import get_user_model
+from django.test import TestCase, override_settings
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.test import APIRequestFactory, APITestCase, force_authenticate
 
 from couples.services import create_couple_with_invite, join_couple
-from uchem.models import PersonalWallet, TransactionReason
-from uchem.services import credit_couple_wallet, credit_personal_wallet
+from uchem import views
+from uchem.models import CoupleWallet, PersonalWallet, TransactionReason, UchemTransaction
+from uchem.services import DEV_UCHEM_RESTORE_TARGET, credit_couple_wallet, credit_personal_wallet
 
 User = get_user_model()
 
 PERSONAL_URL = "/api/uchem/personal/"
 COUPLE_URL = "/api/uchem/couple/"
+DEV_RESTORE_URL = "/api/uchem/dev/restore/"
+TEST_CODE = "test-code-123"
 
 
 def make_user(username="alice"):
@@ -133,3 +137,125 @@ class CoupleWalletViewTests(APITestCase):
         response = self.client.get(COUPLE_URL)
 
         self.assertEqual(response.data["balance"], 111)
+
+
+@override_settings(DEBUG=True, DEV_UCHEM_TEST_CODE=TEST_CODE)
+class DevRestoreCoupleWalletViewTests(TestCase):
+    """Calls DevRestoreCoupleWalletView directly via APIRequestFactory,
+    deliberately NOT through self.client/the real URL path.
+
+    Verified directly (not assumed): manage.py test's own runner forces
+    settings.DEBUG=False for the ENTIRE test run by default (see
+    django.test.runner.DiscoverRunner's debug_mode=False default,
+    applied via setup_test_environment() before any test or URLconf
+    module loads). uchem/urls.py's `if settings.DEBUG:
+    urlpatterns.append(...)` therefore already evaluated to False the
+    first time the URLconf was resolved in this process — permanently,
+    for the whole test run — and no per-test @override_settings can
+    retroactively re-run that module-level conditional without unsafely
+    reloading a shared, process-global urls module (risking other test
+    classes seeing mutated global routing state). Calling the view
+    directly tests exactly what's actually ours to verify — the view's
+    own auth/validation/business logic — without depending on that
+    already-well-established, trivial Django URL-conditional idiom,
+    which isn't meaningfully at risk here.
+    """
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = views.DevRestoreCoupleWalletView.as_view()
+        self.alice = make_user("alice")
+        make_user("bob")
+        couple, invite = create_couple_with_invite(self.alice)
+        self.bob = User.objects.get(username="bob")
+        join_couple(invite.code, self.bob)
+        self.couple = couple
+
+    def _post(self, data, user=None):
+        request = self.factory.post(DEV_RESTORE_URL, data)
+        if user is not None:
+            force_authenticate(request, user=user)
+        response = self.view(request)
+        response.render()
+        return response
+
+    def test_requires_authentication(self):
+        response = self._post({"code": TEST_CODE})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_valid_code_at_zero_restores_to_the_target(self):
+        response = self._post({"code": TEST_CODE}, user=self.alice)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["balance"], DEV_UCHEM_RESTORE_TARGET)
+
+    def test_valid_code_at_a_partial_balance_restores_to_the_target(self):
+        credit_couple_wallet(self.couple, 7500, TransactionReason.COUPLE_CONTRIBUTION, "seed")
+
+        response = self._post({"code": TEST_CODE}, user=self.alice)
+
+        self.assertEqual(response.data["balance"], DEV_UCHEM_RESTORE_TARGET)
+
+    def test_valid_code_at_the_target_remains_unchanged(self):
+        credit_couple_wallet(self.couple, DEV_UCHEM_RESTORE_TARGET, TransactionReason.COUPLE_CONTRIBUTION, "seed")
+
+        response = self._post({"code": TEST_CODE}, user=self.alice)
+
+        self.assertEqual(response.data["balance"], DEV_UCHEM_RESTORE_TARGET)
+
+    def test_valid_code_above_the_target_is_unchanged(self):
+        credit_couple_wallet(self.couple, DEV_UCHEM_RESTORE_TARGET + 500, TransactionReason.COUPLE_CONTRIBUTION, "seed")
+
+        response = self._post({"code": TEST_CODE}, user=self.alice)
+
+        self.assertEqual(response.data["balance"], DEV_UCHEM_RESTORE_TARGET + 500)
+
+    def test_invalid_code_credits_nothing(self):
+        response = self._post({"code": "wrong-code"}, user=self.alice)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(CoupleWallet.objects.filter(couple=self.couple).exists())
+        self.assertFalse(UchemTransaction.objects.filter(reason=TransactionReason.DEV_TEST_CREDIT).exists())
+
+    def test_missing_code_credits_nothing(self):
+        response = self._post({}, user=self.alice)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(CoupleWallet.objects.filter(couple=self.couple).exists())
+
+    def test_unpaired_user_gets_no_couple_wallet_credit(self):
+        solo = make_user("solo")
+
+        response = self._post({"code": TEST_CODE}, user=solo)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_personal_wallets_remain_unchanged(self):
+        credit_personal_wallet(self.alice, 1500, TransactionReason.WELCOME_REWARD, "a-seed")
+        credit_personal_wallet(self.bob, 1000, TransactionReason.WELCOME_REWARD, "b-seed")
+
+        self._post({"code": TEST_CODE}, user=self.alice)
+
+        self.assertEqual(PersonalWallet.objects.get(user=self.alice).balance, 1500)
+        self.assertEqual(PersonalWallet.objects.get(user=self.bob).balance, 1000)
+
+    def test_client_supplied_amount_is_ignored(self):
+        # There is no "amount" field on this endpoint's contract at all —
+        # sending one has zero effect; the server always computes the
+        # shortfall itself.
+        response = self._post({"code": TEST_CODE, "amount": 999999}, user=self.alice)
+
+        self.assertEqual(response.data["balance"], DEV_UCHEM_RESTORE_TARGET)
+
+    @override_settings(DEBUG=False)
+    def test_returns_404_when_debug_is_false(self):
+        # The view's OWN defensive runtime check — the second layer
+        # behind urls.py's conditional registration (see
+        # DevRestoreCoupleWalletView's own doc comment) — is what this
+        # actually exercises, correctly, since it's a plain per-request
+        # settings.DEBUG read, not import-time-cached like urls.py's own
+        # conditional (see this class's own doc comment).
+        response = self._post({"code": TEST_CODE}, user=self.alice)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertFalse(CoupleWallet.objects.filter(couple=self.couple).exists())

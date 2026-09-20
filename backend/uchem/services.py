@@ -1,6 +1,11 @@
+import uuid
+
 from django.db import IntegrityError, transaction
 
-from .models import CoupleWallet, PersonalWallet, UchemTransaction
+from .models import CoupleWallet, PersonalWallet, TransactionReason, UchemTransaction
+
+# Development-only testing target — see restore_couple_wallet_for_development.
+DEV_UCHEM_RESTORE_TARGET = 10_000
 
 
 class InsufficientUchemError(Exception):
@@ -174,3 +179,42 @@ def debit_couple_wallet(couple, amount: int, reason: str, idempotency_key: str) 
     partner's PersonalWallet."""
     _validate_positive_amount(amount)
     return _apply_couple_wallet_delta(couple, -amount, reason, idempotency_key)
+
+
+def restore_couple_wallet_for_development(couple) -> CoupleWallet:
+    """DEVELOPMENT-ONLY: brings `couple`'s Wallet up to
+    DEV_UCHEM_RESTORE_TARGET, crediting only the shortfall — never a flat
+    top-up, and a genuine no-op (no credit call, no ledger row) once the
+    balance is already at or above the target. Never touches either
+    partner's PersonalWallet, and never debits.
+
+    Correctness under concurrency comes ENTIRELY from the row lock and the
+    shortfall check happening together, inside one atomic transaction —
+    NOT from the idempotency key below, and NOT from any timing/bucketing.
+    Two simultaneous calls for the same couple serialize on this wallet's
+    row: whichever transaction commits first restores it to the target;
+    the second, once it can finally acquire the lock, reads the
+    ALREADY-restored balance, computes a shortfall of 0 (or negative), and
+    credits nothing. This is the same select_for_update()-first pattern
+    couples.services.join_couple and rooms.services.purchase_room already
+    use to serialize a couple-scoped mutation — not a new technique.
+
+    The idempotency key passed to credit_couple_wallet is a fresh
+    uuid4 per actual credit, namespaced by couple id. It does not need to
+    be deterministic/stable the way a one-time purchase's key does —
+    restoring is intentionally a repeatable action (the same couple may
+    legitimately do this many times across a testing session), and the
+    lock/shortfall check above is what already prevents any single
+    restore from double-applying, not this key. The key still satisfies
+    credit_couple_wallet's own required duplicate-protection contract
+    (see its doc comment) — it just isn't the mechanism doing the
+    interesting work here.
+    """
+    with transaction.atomic():
+        wallet, _ = CoupleWallet.objects.select_for_update().get_or_create(couple=couple)
+        shortfall = DEV_UCHEM_RESTORE_TARGET - wallet.balance
+        if shortfall <= 0:
+            return wallet
+
+        idempotency_key = f"dev-uchem-restore:{couple.id}:{uuid.uuid4()}"
+        return credit_couple_wallet(couple, shortfall, TransactionReason.DEV_TEST_CREDIT, idempotency_key)
