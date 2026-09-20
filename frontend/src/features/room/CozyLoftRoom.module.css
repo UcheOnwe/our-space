@@ -1,0 +1,149 @@
+/* Deliberately duplicates RoomCanvas.module.css's `.wrapper` sizing
+   contract verbatim rather than sharing a module — RoomCanvas stays
+   untouched per the approved plan. Both rooms must size identically
+   (mobile vh-box vs desktop aspect-ratio fill) for the gallery's
+   full-screen ↔ framed transition to read as one consistent room slot
+   regardless of which room is active. Worth extracting into a shared
+   module once a third room exists. */
+.wrapper {
+  position: relative;
+  width: 100%;
+  height: 62vh;
+  min-height: 320px;
+  max-height: 640px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--border);
+  /* Our own pan-drag/pinch-zoom (useRoomCameraGestures) owns touch
+     gestures inside the room — without this, the browser would also try
+     to scroll/zoom the page underneath a gesture, the same class of
+     conflict RoomCanvas.module.css's identical rule already solves for
+     Couple Home. */
+  touch-action: none;
+}
+
+@media (min-width: 701px) {
+  .wrapper {
+    height: auto;
+    aspect-ratio: 1600 / 900;
+    min-height: 0;
+    max-height: none;
+    border-radius: 0;
+  }
+}
+
+/* The pannable/zoomable room world — sized/positioned by
+   useRoomCameraGestures (width/height/transform all set inline; see
+   CozyLoftRoom.tsx). `transform-origin: 0 0` matches that hook's own
+   math, which mirrors RoomCanvas.tsx's positionWorld formula exactly
+   (scale from the top-left, then translate) rather than CSS's own
+   center-origin default. On desktop, where .wrapper's aspect-ratio
+   already equals the world's own 1600x900 shape, the computed scale
+   exactly fills the box with zero pan needed — visually identical to the
+   plain object-fit: cover this replaces. */
+.world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+/* The "entering an activity" visual EFFECT layer — see CozyLoftRoom.tsx's
+   own doc comment for why this is a separate nested transform rather
+   than a scripted move of .world's own pan/zoom. Scaling an
+   already-viewport-covering box up from ANY transform-origin (set
+   per-hotspot inline, see CozyLoftRoom.tsx) can never expose empty
+   space, which is what makes this safe regardless of the user's current
+   pan/zoom. This 1000ms duration is deliberately LONGER than
+   useRoomHotspotInteraction's own TRANSITION_DURATION_MS (650ms, when
+   RoomCloseUp actually mounts) — see that constant's own doc comment for
+   why: RoomCloseUp's ~350ms fade-in plays during this zoom's OWN last
+   350ms, so both finish together instead of the zoom visibly settling to
+   a stop before anything else happens. A smooth "standard" easing curve
+   (Material Design's accelerate-then-decelerate, a reasonable
+   game-UI-ish feel without inventing a bespoke curve) rather than
+   linear/ease, so the growth actually reads as deliberate motion instead
+   of a mechanical ramp. The blur simply grows alongside the scale (not a separate
+   peak-then-clear pulse) — there's no need to re-sharpen the backdrop
+   before the close-up's own crisp content takes over on top of it. */
+.activityEffect {
+  position: absolute;
+  inset: 0;
+  transition:
+    transform 1000ms cubic-bezier(0.4, 0, 0.2, 1),
+    filter 1000ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.activityEffectActive {
+  transform: scale(1.45);
+  filter: blur(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activityEffect {
+    transition: none;
+  }
+}
+
+.video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* .world is already sized/scaled to the video's own 16:9 aspect ratio
+     (see useRoomCameraGestures), so this is a defensive fallback for any
+     sub-pixel rounding, not the thing actually doing the cropping. */
+  object-fit: cover;
+}
+
+/* Invisible but actively decoding/playing — see PreloadVideo's own doc
+   comment in CozyLoftRoom.tsx. Positioned exactly like the real videos so
+   it isn't affecting layout, just never visible or interactive. */
+.preloadVideo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.activityPanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px;
+  border-radius: var(--radius);
+  background: rgba(20, 18, 16, 0.55);
+  text-align: center;
+  color: white;
+}
+
+.activityTitle {
+  margin: 0;
+  font-size: 18px;
+}
+
+.activityPrimaryButton {
+  border: none;
+  border-radius: var(--radius);
+  padding: 10px 18px;
+  background: var(--accent);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.activityPrimaryButton:hover,
+.activityPrimaryButton:focus-visible {
+  background: var(--accent-hover);
+}
+
+.activityNote {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.75;
+}

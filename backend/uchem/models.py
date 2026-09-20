@@ -19,6 +19,10 @@ class TransactionReason(models.TextChoices):
     COMPANION_PURCHASE = "companion_purchase", "Companion Purchase"
     COSMETIC_PURCHASE = "cosmetic_purchase", "Cosmetic Purchase"
     COUPLE_CONTRIBUTION = "couple_contribution", "Couple Contribution"
+    # Development-only — see services.restore_couple_wallet_for_development
+    # and views.DevRestoreCoupleWalletView. Never applied in production:
+    # that view is only registered/reachable when settings.DEBUG is True.
+    DEV_TEST_CREDIT = "dev_test_credit", "Developer Test Credit"
 
 
 class PersonalWallet(models.Model):

@@ -29,6 +29,22 @@
   width: 100vw;
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
+  /* Cancels #root's own bottom padding (index.css: `padding: 28px 20px
+     56px`) — that padding belongs to #root, not this box, so without
+     reaching into it a 56px strip of the app's normal light/cream page
+     background (--bg) shows below the room experience on every device,
+     worse on a short mobile viewport where .page's own content can also
+     end before this container's full 100svh height. Couple Home's
+     persistent nav (CoupleHomeNav.module.css) is a near-black
+     photographic bar — #141210 is the same solid "near-black" reused
+     verbatim from this slice's own hotspot close-up surfaces
+     (RoomHotspotIcon/RoomCloseUp), so anywhere neither the nav nor the
+     dusty-pink page background (CoupleHomePage.module.css's `.page`)
+     reaches reads as "the dark room," never as plain white/cream. Scoped
+     to fullBleed only — WatchTogetherScreen's normal-width presence box
+     keeps #root's ordinary padding untouched. */
+  margin-bottom: -56px;
+  background: #141210;
 }
 
 .layer {

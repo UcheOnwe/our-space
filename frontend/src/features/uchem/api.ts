@@ -13,3 +13,16 @@ export function fetchPersonalWallet(): Promise<UchemWalletData> {
 export function fetchCoupleWallet(): Promise<UchemWalletData> {
   return apiClient.get('/uchem/couple/')
 }
+
+/** DEVELOPMENT ONLY — restores the caller's Couple Wallet toward a fixed
+ * 10,000-Uchem testing target using a local testing code (see
+ * backend/uchem/views.py's DevRestoreCoupleWalletView, only registered
+ * at all when the backend is running with DEBUG=True). Never sends an
+ * amount, couple id, or username — the backend derives everything from
+ * the authenticated session and the code is all that's validated.
+ * Rejects with an ApiError (400) for an invalid code or an unpaired
+ * caller, and with a 404-shaped ApiError if the backend isn't running in
+ * development mode at all. */
+export function restoreDevCoupleWallet(code: string): Promise<UchemWalletData> {
+  return apiClient.post('/uchem/dev/restore/', { code })
+}

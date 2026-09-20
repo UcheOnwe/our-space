@@ -11,42 +11,41 @@
      actually full-width, not just this page's own content. `.page` here
      is a plain 100%-of-its-now-full-width-parent block; it only needs its
      own padding back, since #root's 20px side padding (index.css) no
-     longer reaches content that's positioned outside #root's own box. */
-  padding: 0 clamp(8px, 1.5vw, 24px) 10px;
+     longer reaches content that's positioned outside #root's own box.
+     `padding-top` clears CoupleHomeNav's own fixed-position bar (see
+     CoupleHomeNav.module.css) — it's no longer in normal document flow,
+     so content here would otherwise render underneath it. */
+  padding: 60px clamp(8px, 1.5vw, 24px) 10px;
   box-sizing: border-box;
+  /* The whole page canvas — welcome area, the gap/frame around the room,
+     and any remaining space — is dusty pink now, not just a pale card
+     sitting on the normal cream --bg. `color-mix` blends --accent-secondary
+     (index.css: "dusty pink — secondary accents") into --bg at a strength
+     visibly richer than the old --accent-secondary-bg card tint (16-18%)
+     without going near a solid/saturated block, and it automatically
+     tracks light/dark mode since both source tokens already do. The room
+     itself (RoomExperience/CozyLoftRoom/RoomCanvas) paints its own opaque
+     surface on top, so this only shows through the surrounding canvas —
+     exactly the area that was still white/cream before. */
+  background: color-mix(in srgb, var(--accent-secondary) 30%, var(--bg));
 }
 
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  /* Deliberately compact — the header's job is just account/logout
-     access, not competing with the room for vertical space. */
-  padding-top: 8px;
-}
-
-.wordmark {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--accent);
+/* Text-only now — the page itself carries the pink tint uniformly, so a
+   separate card-like background here would read as two different pinks
+   stacked (the exact "pale card on a white page" look this replaces).
+   --text-h/--text keep their normal contrast against this light tint. */
+.intro {
+  padding: 10px 14px;
 }
 
 .intro h1 {
   margin: 0 0 2px;
   font-size: 20px;
+  color: var(--text-h);
 }
 
 .intro p {
   margin: 0;
   color: var(--text);
   font-size: 14px;
-}
-
-@media (max-width: 700px) {
-  .header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
 }

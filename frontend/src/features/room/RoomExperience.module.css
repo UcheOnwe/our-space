@@ -1,0 +1,46 @@
+.frame {
+  position: relative;
+}
+
+.loadingPlaceholder {
+  width: 100%;
+  min-height: 320px;
+  border-radius: var(--radius);
+  background: var(--border);
+}
+
+.roomSlot {
+  transition: transform 320ms ease, opacity 320ms ease;
+  transform: scale(1);
+  opacity: 1;
+}
+
+/* Shrink: the room is still mounted (mode stays 'room' until the
+   matching setTimeout in RoomExperience.tsx flips it) — a plain class
+   toggle + transition is the right tool for animating an ALREADY-PRESENT
+   element to a new state. Restrained on purpose — a subtle pull-back
+   communicating "entering the browser," not a dramatic cinematic zoom. */
+.shrinking .roomSlot {
+  transform: scale(0.92);
+  opacity: 0;
+}
+
+/* Expand: the newly-active room has just mounted fresh (mode already
+   flipped back to 'room') — there's no prior on-screen state to
+   transition FROM within one render, so a one-shot @keyframes animation
+   is the correct tool here instead of a transition. Mirrors `.shrinking`'s
+   own restrained scale, just reversed. */
+@keyframes room-expand-in {
+  from {
+    transform: scale(0.92);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.expanding .roomSlot {
+  animation: room-expand-in 320ms ease;
+}

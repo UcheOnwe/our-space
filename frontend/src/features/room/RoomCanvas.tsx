@@ -8,7 +8,7 @@ import { CoupleHugCoordinator } from './avatars/CoupleHugCoordinator'
 import { loadAvatarTextures } from './avatars/createAvatarRig'
 import { FEMALE_AVATAR_CONFIG, MALE_AVATAR_CONFIG, TARGET_BODY_HEIGHT_WORLD_UNITS } from './avatars/avatarConfigs'
 import { HUG_INTERACTION_POINT, HUG_SPRITE_TEXTURE_PATH, HUG_SPRITE_WORLD_SIZE } from './avatars/avatarActivities'
-import { clampPan, computeCameraFrame } from './camera'
+import { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR, clampPan, computeCameraFrame, computeMaxPan } from './camera'
 import { ROOM_WORLD_HEIGHT, ROOM_WORLD_WIDTH } from './constants'
 import { createRoomLayers } from './layers'
 import { ENVIRONMENT_TEXTURE_PATH, FURNITURE_PLACEMENTS, LAMP_BASE, LAMP_GLOW } from './roomAssets'
@@ -553,6 +553,7 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
     let avatarCleanup: (() => void) | null = null
     let tvCleanup: (() => void) | null = null
     let lampCleanup: (() => void) | null = null
+    let pinchCleanup: (() => void) | null = null
 
     async function setup() {
       const application = new Application()
@@ -775,6 +776,11 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
       let dragging = false
       let lastGlobalX = 0
       let lastGlobalY = 0
+      // The cover-fit scale from computeCameraFrame, BEFORE the pinch
+      // zoom multiplier below is applied on top of it — recomputed on
+      // every resize, never touched by zooming itself.
+      let baseScale = MIN_ZOOM_FACTOR
+      let zoomFactor = MIN_ZOOM_FACTOR
 
       function positionWorld(viewportWidth: number, viewportHeight: number) {
         world.position.set(
@@ -787,9 +793,26 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
         if (environment) environment.cursor = maxPanX > 0 || maxPanY > 0 ? 'grab' : 'default'
       }
 
-      // Recomputes scale + pan limits for the current viewport size — the
-      // one place camera.ts's pure math meets the real, measured DOM
-      // element. Called once up front and again on every resize.
+      // Applies baseScale*zoomFactor and re-derives pan bounds for THAT
+      // scale (not just the base one) — shared by both a plain resize and
+      // a pinch-zoom change, so pan limits are always correct for
+      // whatever the room is actually scaled to right now.
+      function applyScale(viewportWidth: number, viewportHeight: number) {
+        const scale = baseScale * zoomFactor
+        maxPanX = computeMaxPan(ROOM_WORLD_WIDTH * scale, viewportWidth)
+        maxPanY = computeMaxPan(ROOM_WORLD_HEIGHT * scale, viewportHeight)
+        panX = clampPan(panX, maxPanX)
+        panY = clampPan(panY, maxPanY)
+        world.scale.set(scale)
+        positionWorld(viewportWidth, viewportHeight)
+        updateCursor()
+      }
+
+      // Recomputes the base cover-fit scale for the current viewport size
+      // — the one place camera.ts's pure math meets the real, measured DOM
+      // element. Called once up front and again on every resize. Does NOT
+      // reset zoomFactor — resizing (e.g. a phone rotation) shouldn't
+      // silently undo a pinch the user just did.
       function applyCameraFrame() {
         const rect = wrapperRef.current?.getBoundingClientRect()
         if (!rect || rect.width === 0 || rect.height === 0) return
@@ -797,18 +820,44 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
         // Resizes the actual renderer surface to match the wrapper's real
         // pixel size. Without this, the canvas stays at Pixi's default
         // 800x600 and the browser just CSS-stretches it to fit — blurry,
-        // and it would silently break the "contain vs. min-scale" camera
-        // math below, which must be computed against the true surface
-        // size, not a fixed default.
+        // and it would silently break the cover-fit/min-scale camera math
+        // below, which must be computed against the true surface size,
+        // not a fixed default.
         application.renderer.resize(rect.width, rect.height)
 
-        const frame = computeCameraFrame(rect.width, rect.height)
-        maxPanX = frame.maxPanX
-        maxPanY = frame.maxPanY
-        panX = clampPan(panX, maxPanX)
-        panY = clampPan(panY, maxPanY)
+        baseScale = computeCameraFrame(rect.width, rect.height).scale
+        applyScale(rect.width, rect.height)
+      }
 
-        world.scale.set(frame.scale)
+      // Rescales around a fixed SCREEN-space focal point (the pinch
+      // gesture's own midpoint) rather than the world's center — the
+      // standard "zoom that keeps the point under your fingers steady"
+      // calculation: read which world-space point currently sits under
+      // the focal point at the OLD scale, then choose the new pan so that
+      // same world point still sits under the focal point at the NEW
+      // scale. `focalX`/`focalY` are canvas-relative (see the pointer
+      // handlers below), matching positionWorld's own coordinate space.
+      function applyZoom(nextZoomFactor: number, focalX: number, focalY: number) {
+        const rect = wrapperRef.current?.getBoundingClientRect()
+        if (!rect) return
+
+        const oldScale = baseScale * zoomFactor
+        const worldPosXOld = rect.width / 2 - (ROOM_WORLD_WIDTH / 2) * oldScale + panX
+        const worldPosYOld = rect.height / 2 - (ROOM_WORLD_HEIGHT / 2) * oldScale + panY
+        const worldX = (focalX - worldPosXOld) / oldScale
+        const worldY = (focalY - worldPosYOld) / oldScale
+
+        zoomFactor = Math.max(MIN_ZOOM_FACTOR, Math.min(MAX_ZOOM_FACTOR, nextZoomFactor))
+        const newScale = baseScale * zoomFactor
+        maxPanX = computeMaxPan(ROOM_WORLD_WIDTH * newScale, rect.width)
+        maxPanY = computeMaxPan(ROOM_WORLD_HEIGHT * newScale, rect.height)
+
+        const desiredWorldPosX = focalX - worldX * newScale
+        const desiredWorldPosY = focalY - worldY * newScale
+        panX = clampPan(desiredWorldPosX - rect.width / 2 + (ROOM_WORLD_WIDTH / 2) * newScale, maxPanX)
+        panY = clampPan(desiredWorldPosY - rect.height / 2 + (ROOM_WORLD_HEIGHT / 2) * newScale, maxPanY)
+
+        world.scale.set(newScale)
         positionWorld(rect.width, rect.height)
         updateCursor()
       }
@@ -824,6 +873,11 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
       if (environment) {
         environment.eventMode = 'static'
         environment.on('pointerdown', (event) => {
+          // A pinch (2+ fingers, tracked natively below) owns the gesture
+          // instead — see handlePointerDownNative, which also cancels an
+          // in-progress single-finger drag the instant a second finger
+          // lands, so the two mechanisms never fight over panX/panY.
+          if (activePointers.size >= 2) return
           if (maxPanX <= 0 && maxPanY <= 0) return
           dragging = true
           lastGlobalX = event.global.x
@@ -831,7 +885,7 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
           if (environment) environment.cursor = 'grabbing'
         })
         environment.on('globalpointermove', (event) => {
-          if (!dragging) return
+          if (!dragging || activePointers.size >= 2) return
           const rect = wrapperRef.current?.getBoundingClientRect()
           if (!rect) return
           panX = clampPan(panX + (event.global.x - lastGlobalX), maxPanX)
@@ -848,6 +902,68 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
         environment.on('pointerupoutside', endDrag)
       }
 
+      // --- Pinch-to-zoom ---
+      // Plain native Pointer Events on the real canvas DOM element, not a
+      // Pixi-level mechanism — Pixi's own event system hit-tests one
+      // sprite at a time, which fits single-pointer drag (above) but not
+      // "track two simultaneous fingers regardless of what's under each
+      // one." Desktop is unaffected: a mouse only ever produces one
+      // pointer, so `activePointers.size` never reaches 2 there.
+      const activePointers = new Map<number, { x: number; y: number }>()
+      let pinchStartDistance = 0
+      let pinchStartZoom = MIN_ZOOM_FACTOR
+
+      function pointerDistance(a: { x: number; y: number }, b: { x: number; y: number }): number {
+        return Math.hypot(a.x - b.x, a.y - b.y)
+      }
+
+      function handlePointerDownNative(event: PointerEvent) {
+        activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
+        if (activePointers.size === 2) {
+          const [a, b] = Array.from(activePointers.values())
+          pinchStartDistance = pointerDistance(a, b)
+          pinchStartZoom = zoomFactor
+          // A pinch starting mid-drag must not leave the single-finger
+          // pan still "live" underneath it once the pinch ends.
+          dragging = false
+        }
+      }
+
+      function handlePointerMoveNative(event: PointerEvent) {
+        if (!activePointers.has(event.pointerId)) return
+        activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
+        if (activePointers.size !== 2 || pinchStartDistance <= 0) return
+
+        const rect = wrapperRef.current?.getBoundingClientRect()
+        if (!rect) return
+        const [a, b] = Array.from(activePointers.values())
+        const newDistance = pointerDistance(a, b)
+        const midClientX = (a.x + b.x) / 2
+        const midClientY = (a.y + b.y) / 2
+        applyZoom(pinchStartZoom * (newDistance / pinchStartDistance), midClientX - rect.left, midClientY - rect.top)
+      }
+
+      function handlePointerEndNative(event: PointerEvent) {
+        activePointers.delete(event.pointerId)
+        if (activePointers.size < 2) {
+          pinchStartDistance = 0
+        }
+      }
+
+      const canvas = application.canvas
+      canvas.addEventListener('pointerdown', handlePointerDownNative)
+      canvas.addEventListener('pointermove', handlePointerMoveNative)
+      canvas.addEventListener('pointerup', handlePointerEndNative)
+      canvas.addEventListener('pointercancel', handlePointerEndNative)
+      canvas.addEventListener('pointerleave', handlePointerEndNative)
+      pinchCleanup = () => {
+        canvas.removeEventListener('pointerdown', handlePointerDownNative)
+        canvas.removeEventListener('pointermove', handlePointerMoveNative)
+        canvas.removeEventListener('pointerup', handlePointerEndNative)
+        canvas.removeEventListener('pointercancel', handlePointerEndNative)
+        canvas.removeEventListener('pointerleave', handlePointerEndNative)
+      }
+
       applyCameraFrame()
       resizeObserver = new ResizeObserver(() => applyCameraFrame())
       resizeObserver.observe(wrapperRef.current)
@@ -860,6 +976,7 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
       avatarCleanup?.()
       tvCleanup?.()
       lampCleanup?.()
+      pinchCleanup?.()
       resizeObserver?.disconnect()
       app?.destroy(true, { children: true })
     }

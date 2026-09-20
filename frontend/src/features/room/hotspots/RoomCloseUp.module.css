@@ -1,0 +1,158 @@
+.closeUp {
+  position: absolute;
+  inset: 0;
+}
+
+/* One-shot mount/unmount animations (not a class-toggle transition,
+   since this component itself mounts fresh on "closeup" and stays
+   mounted through "leaving" right up to unmount) — same
+   mount-time-keyframe pattern RoomExperience.module.css's own
+   `.expanding` already uses for its room-expand-in effect.
+   Deliberately SHORTER than CozyLoftRoom.module.css's own
+   `.activityEffect` zoom duration (1000ms): this mounts (see
+   useRoomHotspotInteraction.ts's TRANSITION_DURATION_MS, 650ms) WHILE
+   that zoom is still running its last 350ms, so this fade-in plays
+   DURING the zoom's own tail rather than after it — the two finish
+   together as one continuous handoff instead of "zoom settles to a
+   stop, then a separate reveal begins." */
+.entering {
+  animation: closeup-enter 350ms ease both;
+}
+
+.leaving {
+  animation: closeup-leave 350ms ease both;
+}
+
+@keyframes closeup-enter {
+  from {
+    transform: scale(1.12);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes closeup-leave {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(0.94);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .entering,
+  .leaving {
+    /* Opacity-only crossfade, no scale — CozyLoftRoom.module.css's
+       `.activityEffect` already turns its own transition off under
+       reduced motion, so this fade is what carries the "something
+       changed" signal in that case instead of the (now static) zoom. */
+    animation-duration: 350ms;
+  }
+  .entering {
+    animation-name: closeup-enter-reduced;
+  }
+  .leaving {
+    animation-name: closeup-leave-reduced;
+  }
+}
+
+@keyframes closeup-enter-reduced {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes closeup-leave-reduced {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* The pannable/zoomable viewport into the close-up video — same pattern
+   as CozyLoftRoom.module.css's `.wrapper`/`.world` (same
+   useRoomCameraGestures hook, same camera.ts math), reused rather than
+   reimplemented so the close-up environments explore the same way the
+   main room does on mobile. */
+.viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+.video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* .world is already sized/scaled to the video's own 16:9 aspect ratio
+     (see useRoomCameraGestures), so this is a defensive fallback for any
+     sub-pixel rounding, not the thing actually doing the cropping. */
+  object-fit: cover;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+/* Fixed to the true VIEWPORT — rendered via a React portal straight into
+   <body> (see RoomCloseUp.tsx's own comment on why plain `position:
+   fixed` in place wasn't enough: a transformed ancestor a few levels up
+   silently turns "fixed" into "stuck to that ancestor's box, which
+   scrolls with the page"). Sits below CoupleHomeNav's own bar (z-index:
+   20, ~56px tall) so it never overlaps the persistent nav, and below the
+   drawer's z-index: 100 so opening the drawer still overlays it — but
+   above PresenceOverlay's z-index: 5 layer. This is the ONE Back control
+   for a close-up; CoupleHomeNav's branding click (RoomExperience's
+   `returnToActiveRoom`) is a second, complementary way back from
+   anywhere in the app, not a competing second button in this same view. */
+.backButton {
+  position: fixed;
+  top: 64px;
+  left: 16px;
+  z-index: 15;
+  border: none;
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  background: rgba(20, 18, 16, 0.7);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.backButton:hover,
+.backButton:focus-visible {
+  background: rgba(20, 18, 16, 0.75);
+}
+
+.activity {
+  margin-top: auto;
+  margin-bottom: auto;
+  align-self: center;
+  width: min(360px, 90%);
+}

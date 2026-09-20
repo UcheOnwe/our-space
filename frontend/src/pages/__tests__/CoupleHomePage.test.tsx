@@ -37,6 +37,16 @@ beforeEach(() => {
           }),
         )
       }
+      if (url.endsWith('/api/rooms/gallery/')) {
+        return Promise.resolve(
+          jsonResponse(200, [
+            { room_type: 'couple_home', display_name: 'Couple Home', order: 0, price: 0, is_owned: true, is_active: true },
+          ]),
+        )
+      }
+      if (url.endsWith('/api/uchem/couple/')) {
+        return Promise.resolve(jsonResponse(200, { balance: 5000, updated_at: '2026-01-01T00:00:00Z' }))
+      }
       throw new Error(`Unexpected fetch to ${url}`)
     }),
   )
@@ -93,5 +103,22 @@ describe('CoupleHomePage', () => {
     await user.click(companionItem)
 
     expect(onOpenCompanion).toHaveBeenCalledOnce()
+  })
+
+  it('welcomes the authenticated user by name, not just the partner', async () => {
+    render(
+      <AuthProvider>
+        <CoupleProvider>
+          <PresenceProvider feature="home">
+            <CoupleHomePage onOpenWatch={vi.fn()} onOpenCompanion={vi.fn()} onOpenCompanionProfile={vi.fn()} />
+          </PresenceProvider>
+        </CoupleProvider>
+      </AuthProvider>,
+    )
+
+    // The authenticated user (id 1, "alice") must be named explicitly —
+    // not inferred from being first in the members list — alongside the
+    // partner ("bob"), resolved by excluding the authenticated user's id.
+    expect(await screen.findByRole('heading', { name: 'Welcome back, alice and bob.' })).toBeInTheDocument()
   })
 })

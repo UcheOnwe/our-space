@@ -179,3 +179,17 @@ FRONTEND_ORIGINS = [
     if origin.strip()
 ]
 CSRF_TRUSTED_ORIGINS = FRONTEND_ORIGINS
+
+# The fixed code the local Add-Uchem developer panel accepts to restore
+# the caller's Couple Wallet to a testing target (see
+# uchem/services.py's restore_couple_wallet_for_development). Only ever
+# set when DEBUG is True — None in a real deployment, so even if
+# DevRestoreCoupleWalletView were somehow reached there, no submitted
+# code could ever match it. Never returned by any API response. The
+# fallback value mirrors this project's own existing DJANGO_SECRET_KEY
+# pattern (an "insecure-dev-only" default that works out of the box
+# locally, fully overridable via .env) — appropriate here since this
+# only ever gates fake development currency, never anything sensitive.
+DEV_UCHEM_TEST_CODE = (
+    os.environ.get("DEV_UCHEM_TEST_CODE", "dev-uchem-test-code-change-me") if DEBUG else None
+)
