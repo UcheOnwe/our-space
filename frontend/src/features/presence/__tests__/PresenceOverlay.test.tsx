@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useExclusionZone } from '../exclusionZone'
 import { PresenceProvider } from '../PresenceContext'
 import { PresenceOverlay } from '../PresenceOverlay'
 import { FakeWebSocket } from './fakeWebSocket'
@@ -68,6 +69,62 @@ async function renderWithConnectedPartnerAndVideoZone() {
   render(
     <PresenceProvider feature="watch">
       <VideoZoneHarness />
+    </PresenceProvider>,
+  )
+  act(() => currentSocket().simulateOpen())
+  act(() =>
+    currentSocket().simulateMessage({
+      type: 'presence.state',
+      self: { userId: 1, avatar: 'A' },
+      partner: { userId: 2, avatar: 'B', online: true, x: 0.5, y: 0.5, visible: true, currentFeature: null },
+    }),
+  )
+  await waitFor(() => expect(screen.getByRole('button', { name: /hug/i })).toBeInTheDocument())
+}
+
+/** The exclusion-zone element itself — deliberately a CHILD of
+ * PresenceOverlay (see ExclusionZoneHarness below), the same position
+ * GamePlayer occupies relative to the real PresenceOverlay in the app, so
+ * `useExclusionZone`'s `useContext` call actually sees the Provider that
+ * PresenceOverlay renders around its children. */
+function ZoneElement() {
+  const [zoneEl, setZoneEl] = useState<HTMLDivElement | null>(null)
+  useExclusionZone(zoneEl)
+  return <div data-testid="zone" ref={setZoneEl} style={{ width: 50, height: 50 }} />
+}
+
+/** Renders PresenceOverlay with a real, mounted element registered as the
+ * presence exclusion zone via `useExclusionZone` — the same hook GamePlayer
+ * itself calls on its `.frameArea` — so these tests exercise the actual
+ * registration path rather than reaching into PresenceOverlay's context
+ * directly. */
+function ExclusionZoneHarness() {
+  return (
+    <PresenceOverlay>
+      <ZoneElement />
+    </PresenceOverlay>
+  )
+}
+
+/** Gives the container a 200x200 rect (matching the global beforeEach mock)
+ * and the registered zone element a 50x50 rect positioned at (100, 100) —
+ * i.e. the zone occupies the normalized [0.5, 0.75] box on both axes,
+ * matching exclusionZone.test.ts's own fixture so the expected clamped
+ * points line up with those already-verified pure-function results. */
+function mockContainerAndZoneRects() {
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+    if (this.getAttribute('data-testid') === 'zone') {
+      return { x: 100, y: 100, left: 100, top: 100, right: 150, bottom: 150, width: 50, height: 50, toJSON: () => {} }
+    }
+    return { x: 0, y: 0, left: 0, top: 0, right: 200, bottom: 200, width: 200, height: 200, toJSON: () => {} }
+  })
+}
+
+async function renderWithConnectedPartnerAndExclusionZone() {
+  mockContainerAndZoneRects()
+  render(
+    <PresenceProvider feature="home">
+      <ExclusionZoneHarness />
     </PresenceProvider>,
   )
   act(() => currentSocket().simulateOpen())
@@ -285,5 +342,67 @@ describe('PresenceOverlay', () => {
     // exists to prevent.
     const sent = sentMessages()
     expect(sent.some((m) => m.type === 'presence.click')).toBe(false)
+  })
+
+  it('entering a registered exclusion zone suspends the local avatar (hides it, sends game-hidden) rather than clamping it to the boundary', async () => {
+    await renderWithConnectedPartnerAndExclusionZone()
+    const zone = screen.getByTestId('zone')
+    const selfAvatarEl = screen.getByRole('img', { name: 'You' }).parentElement as HTMLElement
+
+    act(() => fireEvent.pointerEnter(zone, { pointerType: 'mouse', clientX: 110, clientY: 125 }))
+
+    await waitFor(() => expect(selfAvatarEl.className).toMatch(/avatarDissolved/))
+    const sent = sentMessages()
+    expect(sent).toContainEqual({ type: 'presence.visibility', state: 'game-hidden' })
+    // Never the video-hover state — a distinct, correctly named reason.
+    expect(sent.some((m) => m.type === 'presence.visibility' && m.state === 'video-hidden')).toBe(false)
+  })
+
+  it('transmits nothing while inside the zone — no presence.move/presence.click from movement or clicks that land inside it', async () => {
+    await renderWithConnectedPartnerAndExclusionZone()
+    const zone = screen.getByTestId('zone')
+
+    act(() => fireEvent.pointerEnter(zone, { pointerType: 'mouse', clientX: 110, clientY: 125 }))
+    // A window-level pointermove while still inside — must not resume
+    // tracking or send anything, even though it's the same listener that
+    // drives ordinary desktop movement everywhere else on the surface.
+    act(() => {
+      window.dispatchEvent(new PointerEvent('pointermove', { pointerType: 'mouse', clientX: 120, clientY: 130 }))
+    })
+    // A click landing inside the zone's own bounds (the touch-tap case —
+    // see isInsideExclusionZone) — also skipped.
+    act(() => fireEvent.click(zone, { clientX: 120, clientY: 130, detail: 1 }))
+
+    const sent = sentMessages()
+    expect(sent.some((m) => m.type === 'presence.move')).toBe(false)
+    expect(sent.some((m) => m.type === 'presence.click')).toBe(false)
+  })
+
+  it('resumes presence immediately from the real exit position on pointerleave, and tells the partner it is visible again', async () => {
+    await renderWithConnectedPartnerAndExclusionZone()
+    const zone = screen.getByTestId('zone')
+    const selfAvatarEl = screen.getByRole('img', { name: 'You' }).parentElement as HTMLElement
+
+    act(() => fireEvent.pointerEnter(zone, { pointerType: 'mouse', clientX: 110, clientY: 125 }))
+    await waitFor(() => expect(selfAvatarEl.className).toMatch(/avatarDissolved/))
+
+    // Leaving toward (0.85, 0.625) — a real, valid Our Space position.
+    act(() => fireEvent.pointerLeave(zone, { pointerType: 'mouse', clientX: 170, clientY: 125 }))
+
+    await waitFor(() => expect(selfAvatarEl.className).not.toMatch(/avatarDissolved/))
+    expect(selfAvatarEl.style.left).toBe('85%')
+    expect(selfAvatarEl.style.top).toBe('62.5%')
+
+    const sent = sentMessages()
+    expect(sent).toContainEqual({ type: 'presence.visibility', state: 'visible' })
+    const moveMessage = sent.find((m) => m.type === 'presence.move') as unknown as { x: number; y: number }
+    expect(moveMessage.x).toBeCloseTo(0.85)
+    expect(moveMessage.y).toBeCloseTo(0.625)
+
+    // Tracking is genuinely live again, not just a one-off resume point.
+    act(() => {
+      window.dispatchEvent(new PointerEvent('pointermove', { pointerType: 'mouse', clientX: 190, clientY: 150 }))
+    })
+    await waitFor(() => expect(selfAvatarEl.style.left).toBe('95%'))
   })
 })

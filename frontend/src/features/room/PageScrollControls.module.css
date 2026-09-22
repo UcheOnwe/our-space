@@ -1,0 +1,51 @@
+/* Fixed to the true viewport (portaled to document.body — see
+   PageScrollControls.tsx's own doc comment for why that's safe here but
+   not for the camera cluster) — bottom-left, opposite the analog
+   cluster's bottom-right corner, so the two never collide. Mobile only:
+   a desktop viewport already has a visible, discoverable scrollbar. */
+.cluster {
+  position: fixed;
+  left: calc(16px + env(safe-area-inset-left, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 10;
+}
+
+.button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  background: rgba(20, 18, 16, 0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.55;
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    opacity 150ms ease,
+    background-color 150ms ease;
+}
+
+.button:hover,
+.button:focus-visible {
+  opacity: 1;
+  background: rgba(20, 18, 16, 0.55);
+}
+
+.button:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+
+@media (min-width: 701px) {
+  .cluster {
+    display: none;
+  }
+}

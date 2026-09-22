@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { RoomGallery } from '../RoomGallery'
 import type { RoomGalleryItem } from '../../rooms/types'
+import galleryStyles from '../RoomGallery.module.css'
 
 const ROOMS: RoomGalleryItem[] = [
   { room_type: 'couple_home', display_name: 'Couple Home', order: 0, price: 0, is_owned: true, is_active: true },
@@ -84,6 +85,47 @@ describe('RoomGallery', () => {
     )
 
     expect(screen.getByRole('button', { name: 'Current room' })).toBeDisabled()
+  })
+
+  it('overlays the nav/confirm control cluster directly on the room artwork, not in a separate panel', () => {
+    const { container } = render(
+      <RoomGallery rooms={ROOMS} centeredIndex={0} onCenterChange={vi.fn()} onConfirm={vi.fn()} isSubmitting={false} error={null} />,
+    )
+
+    const gallery = container.querySelector(`.${galleryStyles.gallery}`)!
+    const overlay = container.querySelector(`.${galleryStyles.overlay}`)!
+    // The controls overlay the artwork — nested inside the same box, not
+    // a separate block below it (that was the rejected "black panel"
+    // version). Persistence across page scroll comes from .gallery's own
+    // `position: sticky` (see RoomGallery.module.css), not from splitting
+    // the controls out into their own sticky sibling.
+    expect(gallery.contains(overlay)).toBe(true)
+    expect(overlay.contains(screen.getByRole('button', { name: 'Previous room' }))).toBe(true)
+    // jsdom doesn't apply imported stylesheet rules for getComputedStyle
+    // (no real CSS engine) — .gallery's own class is where
+    // `position: sticky` actually lives.
+    expect(gallery.className).toBe(galleryStyles.gallery)
+  })
+
+  it('only the focused hero slide carries .heroSlideFocused (the class that restores pointer-events: auto) — regression test for the real-device bug where the focused preview was silently unclickable/undraggable', () => {
+    // jsdom doesn't apply imported stylesheet rules (see the test above),
+    // so this pins the fix at the class-membership level: .heroSlide
+    // itself is pointer-events: none (it covers every room's preview,
+    // stacked, only one visible at a time), and .heroSlideFocused is the
+    // ONLY thing that restores pointer-events: auto for the one actually
+    // on screen. Missing that restoration (the real bug this found) meant
+    // NOTHING inside the visible preview — RoomPosterPreview's pan/pinch,
+    // Cozy Loft's/After Hours' own live preview panning, even the confirm
+    // button — could ever receive a pointer event, regardless of any other
+    // pointer-events fix further down the tree.
+    const { container } = render(
+      <RoomGallery rooms={ROOMS} centeredIndex={0} onCenterChange={vi.fn()} onConfirm={vi.fn()} isSubmitting={false} error={null} />,
+    )
+
+    const slides = container.querySelectorAll(`.${galleryStyles.heroSlide}`)
+    expect(slides).toHaveLength(2)
+    expect(slides[0].className).toContain(galleryStyles.heroSlideFocused)
+    expect(slides[1].className).not.toContain(galleryStyles.heroSlideFocused)
   })
 
   it('shows a passed-in error message', () => {

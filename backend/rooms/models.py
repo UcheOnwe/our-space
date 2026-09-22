@@ -9,6 +9,7 @@ class RoomType(models.TextChoices):
 
     COUPLE_HOME = "couple_home", "Couple Home"
     COZY_LOFT = "cozy_loft", "Cozy Loft"
+    AFTER_HOURS = "after_hours", "After Hours"
 
 
 class CoupleRoomOwnership(models.Model):

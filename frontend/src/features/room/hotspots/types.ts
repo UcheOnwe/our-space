@@ -36,5 +36,24 @@ export interface RoomHotspot {
 export type RoomHotspotPhase =
   | { status: 'room' }
   | { status: 'entering'; hotspotId: string }
-  | { status: 'closeup'; hotspotId: string }
+  /** `cameFrom`, when present, records the OTHER close-up this one was
+   * reached directly from (see useRoomHotspotInteraction's `switchHotspot`)
+   * rather than from the plain room — e.g. Garage reached via Door's
+   * "Other Spaces" list. `leaveHotspot` uses it to return there directly
+   * instead of falling back to the room, so back-navigation matches how
+   * the user actually arrived.
+   *
+   * `viaSwitch`, when true, means THIS specific mount was reached via a
+   * direct close-up-to-close-up transition (in EITHER direction —
+   * `switchHotspot` forward, or `leaveHotspot`'s own `cameFrom` return
+   * trip backward) rather than from the plain room. Deliberately a
+   * SEPARATE flag from `cameFrom`, not derived from it: `cameFrom` is
+   * about where THIS close-up's own back button should go, and is
+   * correctly absent on the return trip (Garage -> Door: Door's own back
+   * button must say "Back to Room", not point back to Garage) — but the
+   * MOUNT ANIMATION still needs to know it arrived via a direct switch
+   * either way, so the room can never flash between two close-ups in
+   * either direction (see RoomCanvas.tsx's own `transitionStyle` derived
+   * from this, and RoomCloseUp.tsx's doc comment on what that controls). */
+  | { status: 'closeup'; hotspotId: string; cameFrom?: string; viaSwitch?: boolean }
   | { status: 'leaving'; hotspotId: string }

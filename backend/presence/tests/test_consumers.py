@@ -312,6 +312,28 @@ class VisibilityTests(TransactionTestCase):
         await comm_creator.disconnect()
         await comm_partner.disconnect()
 
+    async def test_game_hidden_visibility_reaches_the_partner(self):
+        # Same mechanism as video-hidden, distinct state string — the
+        # Gaming exclusion-zone-suspension case (real pointer inside an
+        # embedded game player), not a video covering the avatar.
+        creator, partner = await database_sync_to_async(make_paired_couple)()
+
+        comm_creator, _, _ = await connect_as(creator, feature="home")
+        await comm_creator.receive_json_from()
+        comm_partner, _, _ = await connect_as(partner, feature="home")
+        await comm_partner.receive_json_from()
+        await drain_join_and_location(comm_creator)  # presence.join + presence.location
+
+        await comm_partner.send_json_to({"type": "presence.visibility", "state": "game-hidden"})
+
+        visibility = await comm_creator.receive_json_from()
+        self.assertEqual(
+            visibility, {"type": "presence.visibility", "userId": partner.id, "state": "game-hidden"}
+        )
+
+        await comm_creator.disconnect()
+        await comm_partner.disconnect()
+
     async def test_visibility_does_not_cross_feature_rooms(self):
         creator, partner = await database_sync_to_async(make_paired_couple)()
 
@@ -425,7 +447,7 @@ class ClickBroadcastTests(TransactionTestCase):
         await comm_partner.send_json_to({"type": "presence.click", "x": 1.4, "y": -0.3})
 
         click = await comm_creator.receive_json_from()
-        self.assertEqual(click, {"type": "presence.click", "x": 1.0, "y": 0.0})
+        self.assertEqual(click, {"type": "presence.click", "userId": partner.id, "x": 1.0, "y": 0.0})
 
         await comm_creator.disconnect()
         await comm_partner.disconnect()
@@ -446,12 +468,78 @@ class ClickBroadcastTests(TransactionTestCase):
 
         # The partner receives it...
         click = await comm_partner.receive_json_from()
-        self.assertEqual(click, {"type": "presence.click", "x": 0.5, "y": 0.5})
+        self.assertEqual(click, {"type": "presence.click", "userId": creator.id, "x": 0.5, "y": 0.5})
         # ...but the sender receives nothing further.
         self.assertTrue(await comm_creator.receive_nothing(timeout=0.2))
 
         await comm_creator.disconnect()
         await comm_partner.disconnect()
+
+
+class SameUserMultiConnectionTests(TransactionTestCase):
+    """The server-side half of the same-user/multi-device presence identity
+    fix: `sender_channel` skipping is per-CONNECTION, so a second connection
+    belonging to the SAME authenticated user (another device/tab) is not
+    skipped and genuinely receives broadcasts from that user's other
+    connection — the frontend fix (PresenceContext.tsx) depends entirely on
+    every such broadcast carrying the real, correct `userId` so it can tell
+    "this is actually about me" apart from "this is my partner." These
+    tests confirm the backend already upholds that contract."""
+
+    async def test_a_second_connection_of_the_same_user_receives_their_own_move_with_their_own_userId(self):
+        creator, partner = await database_sync_to_async(make_paired_couple)()
+
+        comm_creator_a, _, _ = await connect_as(creator)  # e.g. desktop
+        await comm_creator_a.receive_json_from()
+        comm_creator_b, _, _ = await connect_as(creator)  # e.g. mobile — same user
+        await comm_creator_b.receive_json_from()
+        await drain_join_and_location(comm_creator_a)  # presence.join + presence.location, from connection B joining
+
+        await comm_creator_a.send_json_to({"type": "presence.move", "x": 0.6, "y": 0.7})
+
+        move = await comm_creator_b.receive_json_from()
+        self.assertEqual(move, {"type": "presence.move", "userId": creator.id, "avatar": move["avatar"], "x": 0.6, "y": 0.7})
+        # Never the partner's id — this is the SAME user's own movement.
+        self.assertNotEqual(move["userId"], partner.id)
+
+        await comm_creator_a.disconnect()
+        await comm_creator_b.disconnect()
+
+    async def test_a_second_connection_of_the_same_user_receives_their_own_click_with_their_own_userId(self):
+        creator, partner = await database_sync_to_async(make_paired_couple)()
+
+        comm_creator_a, _, _ = await connect_as(creator)
+        await comm_creator_a.receive_json_from()
+        comm_creator_b, _, _ = await connect_as(creator)
+        await comm_creator_b.receive_json_from()
+        await drain_join_and_location(comm_creator_a)
+
+        await comm_creator_a.send_json_to({"type": "presence.click", "x": 0.2, "y": 0.3})
+
+        click = await comm_creator_b.receive_json_from()
+        self.assertEqual(click, {"type": "presence.click", "userId": creator.id, "x": 0.2, "y": 0.3})
+        self.assertNotEqual(click["userId"], partner.id)
+
+        await comm_creator_a.disconnect()
+        await comm_creator_b.disconnect()
+
+    async def test_disconnecting_one_of_two_connections_reports_the_correct_userId_to_the_other(self):
+        creator, partner = await database_sync_to_async(make_paired_couple)()
+
+        comm_creator_a, _, _ = await connect_as(creator)
+        await comm_creator_a.receive_json_from()
+        comm_creator_b, _, _ = await connect_as(creator)
+        await comm_creator_b.receive_json_from()
+        await drain_join_and_location(comm_creator_a)
+
+        await comm_creator_a.disconnect()
+
+        leave = await comm_creator_b.receive_json_from()
+        # Identifiably "my own other connection left", not "my partner left".
+        self.assertEqual(leave, {"type": "presence.leave", "userId": creator.id})
+        self.assertNotEqual(leave["userId"], partner.id)
+
+        await comm_creator_b.disconnect()
 
 
 class HugInteractionTests(TransactionTestCase):

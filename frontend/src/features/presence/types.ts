@@ -14,11 +14,18 @@ export const FEATURE_LABELS: Record<FeatureName, string> = {
   watch: 'Watch Together',
 }
 
-/** Whether a locally- or remotely-covered-by-video avatar should render.
+/** Whether a locally- or remotely-concealed avatar should render.
  * Deliberately not part of `online` — this is a temporary visual
  * concealment while still fully present in the feature, not a
- * disconnect. */
-export type Visibility = 'visible' | 'video-hidden'
+ * disconnect. Two distinct reasons, kept as separate values rather than
+ * one generic "hidden" (see backend/presence/consumers.py's matching
+ * allowlist):
+ *  - 'video-hidden': a video (Watch Together) is covering the avatar.
+ *  - 'game-hidden': the real pointer is inside an embedded game/activity
+ *    player (Gaming's exclusion zone) — movement isn't being tracked or
+ *    transmitted while this is true, so there's nothing valid to render
+ *    either. See PresenceOverlay.tsx's insideGameZone handling. */
+export type Visibility = 'visible' | 'video-hidden' | 'game-hidden'
 
 export interface SelfInfo {
   userId: number
@@ -49,7 +56,7 @@ export type ServerMessage =
   | { type: 'presence.join'; userId: number; avatar: Avatar }
   | { type: 'presence.move'; userId: number; avatar: Avatar; x: number; y: number }
   | { type: 'presence.leave'; userId: number }
-  | { type: 'presence.click'; x: number; y: number }
+  | { type: 'presence.click'; userId: number; x: number; y: number }
   | { type: 'interaction.hug'; fromUserId: number }
   | { type: 'presence.visibility'; userId: number; state: Visibility }
   | { type: 'presence.location'; userId: number; feature: FeatureName | null }

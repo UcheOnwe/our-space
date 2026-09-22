@@ -39,6 +39,14 @@ class CatalogTests(TestCase):
     def test_price_for_couple_home_is_zero(self):
         self.assertEqual(catalog.price_for(RoomType.COUPLE_HOME), 0)
 
+    def test_price_for_after_hours_is_5000(self):
+        self.assertEqual(catalog.price_for(RoomType.AFTER_HOURS), 5000)
+
+    def test_couple_home_display_name_is_lauruch_loft(self):
+        # User-facing rename only — room_type stays "couple_home".
+        entry = next(e for e in catalog.get_catalog() if e.room_type == RoomType.COUPLE_HOME)
+        self.assertEqual(entry.display_name, "Lauruch Loft")
+
     def test_catalog_order_is_stable_and_sequential(self):
         entries = catalog.get_catalog()
         orders = [entry.order for entry in entries]
@@ -171,6 +179,52 @@ class PurchaseRoomTests(TestCase):
         purchase_room(couple, RoomType.COZY_LOFT)
 
         self.assertEqual(get_or_create_active_room(couple).room_type, RoomType.COZY_LOFT)
+
+
+class PurchaseAfterHoursTests(TestCase):
+    """Mirrors PurchaseRoomTests' meaningfully distinct cases for the
+    5,000-Uchem After Hours room — purchase_room/select_active_room are
+    already fully generic over room_type (see PurchaseRoomTests above for
+    the exhaustive Cozy Loft coverage of the shared mechanics), so this
+    only re-checks the parts that actually differ: the price itself and
+    that the same idempotency/insufficient-balance guarantees hold."""
+
+    def test_purchase_debits_exactly_5000_and_creates_ownership(self):
+        _, _, couple = make_paired_couple()
+        credit_couple_wallet(couple, 5000, TransactionReason.COUPLE_CONTRIBUTION, "seed")
+
+        purchase_room(couple, RoomType.AFTER_HOURS)
+
+        self.assertEqual(CoupleWallet.objects.get(couple=couple).balance, 0)
+        self.assertEqual(
+            CoupleRoomOwnership.objects.filter(couple=couple, room_type=RoomType.AFTER_HOURS).count(), 1
+        )
+        self.assertEqual(get_or_create_active_room(couple).room_type, RoomType.AFTER_HOURS)
+
+    def test_insufficient_uchem_for_after_hours_raises_and_changes_nothing(self):
+        _, _, couple = make_paired_couple()
+        credit_couple_wallet(couple, 4999, TransactionReason.COUPLE_CONTRIBUTION, "seed")
+
+        with self.assertRaises(InsufficientUchemError):
+            purchase_room(couple, RoomType.AFTER_HOURS)
+
+        self.assertEqual(CoupleWallet.objects.get(couple=couple).balance, 4999)
+        self.assertFalse(CoupleRoomOwnership.objects.filter(couple=couple, room_type=RoomType.AFTER_HOURS).exists())
+
+    def test_repeated_after_hours_purchase_only_charges_once(self):
+        _, _, couple = make_paired_couple()
+        credit_couple_wallet(couple, 5000, TransactionReason.COUPLE_CONTRIBUTION, "seed")
+
+        purchase_room(couple, RoomType.AFTER_HOURS)
+        purchase_room(couple, RoomType.AFTER_HOURS)
+
+        self.assertEqual(CoupleWallet.objects.get(couple=couple).balance, 0)
+        self.assertEqual(
+            CoupleRoomOwnership.objects.filter(couple=couple, room_type=RoomType.AFTER_HOURS).count(), 1
+        )
+
+    def test_cozy_loft_price_is_unaffected_by_after_hours(self):
+        self.assertEqual(catalog.price_for(RoomType.COZY_LOFT), 2500)
 
 
 class SelectActiveRoomTests(TestCase):

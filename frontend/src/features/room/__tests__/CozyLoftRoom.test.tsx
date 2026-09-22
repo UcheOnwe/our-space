@@ -5,6 +5,13 @@ import { CozyLoftRoom } from '../CozyLoftRoom'
 import type { CozyLoftRoomHandle } from '../CozyLoftRoom'
 
 function mockViewport(width: number, height: number) {
+  // `offsetWidth`/`offsetHeight`, not just `getBoundingClientRect` — see
+  // useRoomCameraGestures.ts's own doc comment on `currentViewport`: SIZE
+  // is read via the former (immune to an ancestor's CSS transform) since a
+  // real "room mis-fitted until reload" bug traced back to
+  // getBoundingClientRect reporting a transform-shrunk size at mount time.
+  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(width)
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(height)
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
     width,
     height,
@@ -80,26 +87,27 @@ describe('CozyLoftRoom', () => {
     expect(onOpenWatch).toHaveBeenCalledTimes(1)
   })
 
-  it('only reveals the Gaming shell after the Gaming close-up transition completes, with no playable game', async () => {
+  it('only reveals the Gaming selector after the Gaming close-up transition completes, with no game launched yet', async () => {
     render(<CozyLoftRoom />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Play' }))
-    expect(screen.queryByText('Choose a Game')).not.toBeInTheDocument()
+    expect(screen.queryByText('Play Together')).not.toBeInTheDocument()
 
-    expect(await screen.findByText('Choose a Game', {}, PHASE_TRANSITION_WAIT)).toBeInTheDocument()
-    expect(screen.getByText('Game selection is coming soon.')).toBeInTheDocument()
+    expect(await screen.findByText('Play Together', {}, PHASE_TRANSITION_WAIT)).toBeInTheDocument()
+    expect(screen.getByText('Play Solo')).toBeInTheDocument()
+    expect(screen.getByText('Physics Drop')).toBeInTheDocument()
   })
 
   it('returns to the room (hotspots visible again) after Back to Room', async () => {
     render(<CozyLoftRoom />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Play' }))
-    await screen.findByText('Choose a Game', {}, PHASE_TRANSITION_WAIT)
+    await screen.findByText('Play Together', {}, PHASE_TRANSITION_WAIT)
 
     fireEvent.click(screen.getByRole('button', { name: /Back to Room/ }))
     expect(await screen.findByRole('button', { name: 'Watch' }, PHASE_TRANSITION_WAIT)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument()
-    expect(screen.queryByText('Choose a Game')).not.toBeInTheDocument()
+    expect(screen.queryByText('Play Together')).not.toBeInTheDocument()
   })
 
   it('keeps the base room video mounted throughout entering/closeup/leaving — never a blank gap behind the close-up', async () => {
@@ -158,6 +166,22 @@ describe('CozyLoftRoom', () => {
     expect(backButton.parentElement).toBe(document.body)
   })
 
+  it('the TV close-up now supports direct drag (immediate mode), reaching through the shared enableDirectDrag prop passed at this room’s own RoomCloseUp call site', async () => {
+    mockViewport(400, 300)
+    const { container } = render(<CozyLoftRoom />)
+    fireEvent.click(screen.getByRole('button', { name: 'Watch' }))
+    await screen.findByRole('button', { name: /Continue with YouTube/ }, PHASE_TRANSITION_WAIT)
+
+    const world = container.querySelector('video[src="/cozy-loft/tv-closeup.mp4"]')!.parentElement as HTMLDivElement
+    const viewport = world.parentElement as HTMLDivElement
+    const before = world.style.transform
+
+    fireEvent.pointerDown(viewport, { pointerId: 1, clientX: 200, clientY: 150, pointerType: 'touch' })
+    fireEvent.pointerMove(viewport, { pointerId: 1, clientX: 100, clientY: 150, pointerType: 'touch' })
+    // No rAF pump — 'immediate' mode writes synchronously.
+    expect(world.style.transform).not.toBe(before)
+  })
+
   it('allows one-finger panning even with enableHotspots=false (RoomGallery preview can inspect the whole room before unlocking)', () => {
     mockViewport(400, 300) // narrower/taller than the 16:9 world, so panning is meaningful
     const { container } = render(<CozyLoftRoom enableHotspots={false} />)
@@ -195,10 +219,10 @@ describe('CozyLoftRoom', () => {
     expect(screen.getByRole('button', { name: 'Watch' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Play' }))
-    await screen.findByText('Choose a Game', {}, PHASE_TRANSITION_WAIT)
+    await screen.findByText('Play Together', {}, PHASE_TRANSITION_WAIT)
 
     ref.current?.returnToRoom()
     expect(await screen.findByRole('button', { name: 'Watch' }, PHASE_TRANSITION_WAIT)).toBeInTheDocument()
-    expect(screen.queryByText('Choose a Game')).not.toBeInTheDocument()
+    expect(screen.queryByText('Play Together')).not.toBeInTheDocument()
   })
 })

@@ -1,0 +1,36 @@
+.selector {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionTitle {
+  margin: 0;
+  padding: 0 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: white;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cards {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  /* A horizontal scroller, not a wrapping grid — stays comfortably usable
+     down to a narrow phone width without the cards themselves shrinking
+     below a readable size, and scales to a 20+ game catalog later
+     without the section itself needing to grow taller. */
+  padding-bottom: 2px;
+}

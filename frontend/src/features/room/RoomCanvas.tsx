@@ -1,6 +1,16 @@
-import { Application, Assets, Container, Graphics, Sprite } from 'pixi.js'
+import { Application, Assets, Container, Graphics, Rectangle, Sprite, Text } from 'pixi.js'
 import type { Ticker } from 'pixi.js'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { GamingActivity } from '../gaming/GamingActivity'
+import { AmbientEffectsLayer } from './ambient/AmbientEffectsLayer'
+import {
+  LAURUCH_DESKTOP_AMBIENT,
+  LAURUCH_DOOR_AMBIENT,
+  LAURUCH_GARAGE_AMBIENT,
+  LAURUCH_KITCHEN_AMBIENT,
+  LAURUCH_TV_AMBIENT,
+} from './ambient/lauruchAmbience'
+import type { AmbientEffectSpec } from './ambient/types'
 import { AvatarAutonomyDirector } from './avatars/AvatarAutonomyDirector'
 import { AvatarMotionController } from './avatars/AvatarMotionController'
 import { AvatarRig } from './avatars/AvatarRig'
@@ -10,6 +20,9 @@ import { FEMALE_AVATAR_CONFIG, MALE_AVATAR_CONFIG, TARGET_BODY_HEIGHT_WORLD_UNIT
 import { HUG_INTERACTION_POINT, HUG_SPRITE_TEXTURE_PATH, HUG_SPRITE_WORLD_SIZE } from './avatars/avatarActivities'
 import { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR, clampPan, computeCameraFrame, computeMaxPan } from './camera'
 import { ROOM_WORLD_HEIGHT, ROOM_WORLD_WIDTH } from './constants'
+import { HallwayNavigation } from './HallwayNavigation'
+import { RoomCloseUp, RoomCloseUpBackdrop } from './hotspots/RoomCloseUp'
+import { useRoomHotspotInteraction } from './hotspots/useRoomHotspotInteraction'
 import { createRoomLayers } from './layers'
 import { ENVIRONMENT_TEXTURE_PATH, FURNITURE_PLACEMENTS, LAMP_BASE, LAMP_GLOW } from './roomAssets'
 import { computeAvatarDepthKey, syncFloorDepth } from './roomDepth'
@@ -194,22 +207,172 @@ function buildTvGlow(tvSprite: Sprite): Graphics {
   return glow
 }
 
+// How far above the TV sprite's own center the always-visible icon sits —
+// roughly where the screen itself is on the console texture (see
+// TV_SCREEN_GLOW_REGION below, a separate/later constant for the night-
+// ambience glow, calibrated the same way against this same sprite).
+const TV_ICON_Y_OFFSET_FACTOR = 0.22
+const TV_ICON_IDLE_ALPHA = 0.92
+const TV_ICON_HOVER_SCALE = 1.15
+const TV_ICON_LABEL_TEXT = 'Watch'
+
+// Shared "always-visible chip + hover-reveal label" sizing for every
+// LaurUch icon (TV's own buildTvIcon below, and buildRoomIcon's generic
+// Gaming/Kitchen/Door version) — one set of numbers, not two independently
+// tuned ones, so every hotspot in this room reads as the same affordance.
+// Matches RoomHotspotIcon.module.css's OWN resting glyph size (27px) at the
+// mobile radius below, for visual parity between Couple Home's Pixi icons
+// and After Hours'/Cozy Loft's DOM ones — see MOBILE_ICON_BREAKPOINT_PX's
+// own doc comment for why "mobile" is a fixed viewport check here rather
+// than a live CSS media query.
+const ICON_RADIUS_DESKTOP = 20
+// Bumped up for touch, same reasoning RoomHotspotIcon.module.css's own doc
+// comment already gives for ITS mobile-oriented sizing nudge: "mobile has
+// no hover to fall back on" for either discovery or fine-aim, so the
+// resting chip itself needs to read as an obviously TappABLE target and be
+// easy to actually hit, not just be technically visible. Real mobile
+// testing found an earlier, smaller mobile radius (28) still too subtle —
+// this needs to be a clearly, visibly bigger control at rest, not merely a
+// bigger invisible hit area around a same-sized glyph.
+const ICON_RADIUS_MOBILE = 34
+// Matches every other room CSS's own `@media (min-width: 701px)` desktop
+// cutover (RoomCanvas.module.css, CozyLoftRoom.module.css, AfterHoursRoom.
+// module.css, RoomGallery.module.css) — one shared breakpoint, not a
+// second number to keep in sync. Checked once at Pixi setup time (see
+// isMobileViewport's own call site below), consistent with how this scene
+// already treats layout/sizing as fixed for its whole mounted lifetime
+// (furniture/environment sizing, camera world size, etc. aren't
+// live-recomputed across a breakpoint crossing either — only the camera's
+// own pan/zoom continuously reacts to resize, via applyCameraFrame).
+const MOBILE_ICON_BREAKPOINT_PX = 700
+
+function isMobileViewport(): boolean {
+  return window.innerWidth <= MOBILE_ICON_BREAKPOINT_PX
+}
+
+// The translucent chip's own fill/border — one shared visual treatment for
+// every LaurUch icon's frame, matching RoomHotspotIcon.module.css's own
+// `background: rgba(20, 18, 16, 0.6)` / `border: 1.5px solid rgba(255,
+// 255, 255, 0.55)` resting look closely enough to read as the same
+// control language (exact color differs slightly since Pixi additive/
+// normal blending over the room's varied backdrop reads best with a pure
+// black translucent fill here, matched from the TV icon's own
+// already-approved chip color rather than the DOM component's brown-tinted
+// one).
+const ICON_FRAME_FILL_COLOR = 0x000000
+const ICON_FRAME_FILL_ALPHA = 0.45
+const ICON_FRAME_BORDER_WIDTH = 1.5
+const ICON_FRAME_BORDER_COLOR = 0xffffff
+const ICON_FRAME_BORDER_ALPHA = 0.55
+// Space between the glyph's own circular cap and where the label text
+// starts, and between the label text and the frame's rounded right edge —
+// together these are what the frame's width animates OUT TO as the label
+// reveals (see drawExpandingFrame/labelRevealWidth below), so the frame
+// visually contains the label as one continuous pill instead of the label
+// merely floating in the space next to a frame that only ever fits the
+// glyph (the exact bug real device testing found with the first version
+// of this "sideways expansion" — the label slid out to the right, but the
+// translucent chip itself never grew to actually contain it).
+const ICON_LABEL_GAP = 8
+const ICON_LABEL_END_PADDING = 14
+
+/**
+ * Redraws `chip` as a stadium/pill shape: a `radius`-sized circular cap at
+ * the icon's own local origin (0,0) — where the glyph always sits — grown
+ * rightward by `revealWidth` (0 at rest, the full label-sized amount at
+ * full reveal). A rounded rect whose corner radius equals half its own
+ * height naturally produces two semicircle end-caps, so this is a single
+ * shape at every width, not "a circle plus a separate rectangle" — the
+ * left cap stays pixel-identical to the resting circle throughout.
+ *
+ * This exists because a PLAIN Graphics object can't be reshaped by
+ * scaling alone (scaling a circle horizontally ovals it, distorting the
+ * border thickness/corner roundness) — the shape has to be re-drawn
+ * per-frame as it grows, unlike the container's own uniform hover
+ * `.scale`, which is fine for a shape whose proportions aren't changing.
+ */
+function drawExpandingFrame(chip: Graphics, radius: number, revealWidth: number) {
+  const height = radius * 2
+  const width = height + Math.max(0, revealWidth)
+  chip
+    .clear()
+    .roundRect(-radius, -radius, width, height, radius)
+    .fill({ color: ICON_FRAME_FILL_COLOR, alpha: ICON_FRAME_FILL_ALPHA })
+    .stroke({ width: ICON_FRAME_BORDER_WIDTH, color: ICON_FRAME_BORDER_COLOR, alpha: ICON_FRAME_BORDER_ALPHA })
+}
+
+/**
+ * Builds the TV's always-visible discovery icon — a small circular chip
+ * (mirroring RoomHotspotIcon.module.css's resting-visible glyph-in-a-chip
+ * look, since Couple Home is Pixi and can't use that DOM component
+ * directly — see setupTvInteraction's own doc comment) plus a label that
+ * reveals SIDEWAYS on hover (matching RoomHotspotIcon.module.css's own
+ * "collapsed max-width -> expands to the right" language exactly, rather
+ * than the icon's earlier below-the-chip label reveal — see this
+ * component's own module doc comment for why Couple Home's Pixi icons
+ * must reproduce that behavior rather than literally share the DOM
+ * component), eased the exact same way buildTvGlow's own hover glow
+ * already is. Idle at TV_ICON_IDLE_ALPHA (never invisible) rather than
+ * hover-gated, which is the actual behavior change from the previous
+ * hover-only glow discovery mechanism.
+ */
+function buildTvIcon(tvSprite: Sprite, radius: number): { container: Container; label: Text; chip: Graphics } {
+  const renderedWidth = tvSprite.texture.width * tvSprite.scale.x
+  const renderedHeight = tvSprite.texture.height * tvSprite.scale.y
+  const centerX = tvSprite.position.x - (tvSprite.anchor.x - 0.5) * renderedWidth
+  const centerY = tvSprite.position.y - (tvSprite.anchor.y - 0.5) * renderedHeight
+  const iconCenterY = centerY - renderedHeight * TV_ICON_Y_OFFSET_FACTOR
+
+  const container = new Container({ label: 'tv-icon' })
+  container.position.set(centerX, iconCenterY)
+  container.alpha = TV_ICON_IDLE_ALPHA
+  container.eventMode = 'none' // purely decorative; the TV sprite itself owns hit-testing
+
+  const chip = new Graphics()
+  drawExpandingFrame(chip, radius, 0)
+  const glyph = new Text({
+    text: '📺',
+    style: { fontSize: radius * 1.3 },
+  })
+  glyph.anchor.set(0.5)
+  container.addChild(chip, glyph)
+
+  // Left-anchored, vertically centered on the icon. `chip` (above) is
+  // redrawn every tick to grow out and actually CONTAIN this text as one
+  // pill — see drawExpandingFrame's own doc comment for why the frame
+  // can't just be a fixed circle with the label floating next to it.
+  const label = new Text({
+    text: TV_ICON_LABEL_TEXT,
+    style: { fontSize: 14, fill: 0xffffff, fontWeight: '600' },
+  })
+  label.anchor.set(0, 0.5)
+  label.position.set(centerX + radius + ICON_LABEL_GAP, iconCenterY)
+  label.alpha = 0
+
+  return { container, label, chip }
+}
+
 /**
  * Makes the TV/media console the room's first real interactive furniture
- * piece: a soft additive glow that eases in on hover/touch and back out on
- * leave, an appropriate pointer cursor, and a click/tap that opens Watch
+ * piece: an always-visible discovery icon (see buildTvIcon above) plus
+ * the existing soft additive hover glow, a "Watch" label that reveals on
+ * hover, an appropriate pointer cursor, and a click/tap that opens Watch
  * Together through the exact same `onOpenWatch` callback the accessible
  * "Start Watching" button uses (see CoupleHomePage.tsx) — not a second,
  * separate navigation path.
  *
- * The glow (see buildTvGlow above) lives in the same `lighting` layer and
- * uses the same additive-blend "light effect" pattern the lamp's own glow
- * already established, not a new visual language. `eventMode: 'static'`
- * on the TV sprite alone — no custom hitArea — is deliberate: the
- * sprite's full rectangular texture bounds (including its own transparent
- * canvas padding) already make a generously-sized, non-pixel-perfect
- * target for both desktop hover precision and mobile tap forgiveness, per
- * the approved scope, without hand-tuning a separate hit rectangle.
+ * Previously this discovery mechanism was hover-only (the glow was the
+ * ONLY indication the TV was interactive, invisible until a pointer
+ * happened to land on it) — replaced here with an always-visible icon so
+ * Couple Home's TV interaction matches the same "small icon, always
+ * discoverable, brightens on hover/focus" language Cozy Loft's/After
+ * Hours' DOM RoomHotspotIcon already uses, adapted to Pixi (a Container
+ * positioned at the TV's own world coordinates rather than a DOM
+ * element, so it pans/zooms with the Pixi camera automatically — no
+ * separate coordinate-sync code needed). The glow/label/icon all live in
+ * the same `lighting` layer, which already renders after every other
+ * layer (see layers.ts) — the same "always washes over the whole room"
+ * placement the hover glow already used.
  *
  * Returns a cleanup function that removes every listener and the ticker
  * callback this installs.
@@ -219,24 +382,37 @@ function setupTvInteraction(
   layers: RoomLayers,
   application: Application,
   getOnOpenWatch: () => () => void,
+  radius: number,
 ): () => void {
   const glow = buildTvGlow(tvSprite)
-  layers.lighting.addChild(glow)
+  const { container: icon, label, chip } = buildTvIcon(tvSprite, radius)
+  layers.lighting.addChild(glow, icon, label)
 
-  let targetAlpha = 0
-  function tickGlow() {
-    const diff = targetAlpha - glow.alpha
-    glow.alpha = Math.abs(diff) < 0.004 ? targetAlpha : glow.alpha + diff * TV_GLOW_EASE
+  let targetGlowAlpha = 0
+  let targetLabelAlpha = 0
+  function tick() {
+    const glowDiff = targetGlowAlpha - glow.alpha
+    glow.alpha = Math.abs(glowDiff) < 0.004 ? targetGlowAlpha : glow.alpha + glowDiff * TV_GLOW_EASE
+    const labelDiff = targetLabelAlpha - label.alpha
+    label.alpha = Math.abs(labelDiff) < 0.004 ? targetLabelAlpha : label.alpha + labelDiff * TV_GLOW_EASE
+    // The frame itself grows to actually CONTAIN the label as one pill,
+    // driven by the SAME eased 0..1 progress as the label's own alpha
+    // (label.alpha IS that progress, already eased) — see
+    // drawExpandingFrame's own doc comment.
+    drawExpandingFrame(chip, radius, label.alpha * (ICON_LABEL_GAP + label.width + ICON_LABEL_END_PADDING))
+    icon.scale.set(icon.scale.x + ((targetGlowAlpha > 0 ? TV_ICON_HOVER_SCALE : 1) - icon.scale.x) * TV_GLOW_EASE)
   }
-  application.ticker.add(tickGlow)
+  application.ticker.add(tick)
 
   tvSprite.eventMode = 'static'
   tvSprite.cursor = 'pointer'
   function handleOver() {
-    targetAlpha = TV_GLOW_HOVER_ALPHA
+    targetGlowAlpha = TV_GLOW_HOVER_ALPHA
+    targetLabelAlpha = 1
   }
   function handleOut() {
-    targetAlpha = 0
+    targetGlowAlpha = 0
+    targetLabelAlpha = 0
   }
   function handleTap() {
     getOnOpenWatch()()
@@ -246,11 +422,119 @@ function setupTvInteraction(
   tvSprite.on('pointertap', handleTap)
 
   return () => {
-    application.ticker.remove(tickGlow)
+    application.ticker.remove(tick)
     tvSprite.off('pointerover', handleOver)
     tvSprite.off('pointerout', handleOut)
     tvSprite.off('pointertap', handleTap)
     glow.destroy()
+    icon.destroy({ children: true })
+    label.destroy()
+  }
+}
+
+// --- Generic room icon (Gaming/Kitchen/Door) --------------------------------
+// A reusable version of buildTvIcon's "always-visible, hover-brightens,
+// sideways-label-reveals" language for a hotspot that has no existing
+// furniture sprite to own hit-testing (unlike the TV) — the icon container
+// itself is the interactive target, positioned at a fixed, hand-measured
+// world region rather than a sprite's own bounds. Shared by Gaming (the
+// desk monitor's own calibrated region — see MONITOR_GLOW_REGION), Kitchen,
+// and Door, each just supplying their own position/glyph/label/callback.
+const ROOM_ICON_IDLE_ALPHA = 0.92
+const ROOM_ICON_HOVER_SCALE = 1.15
+
+function buildRoomIcon(
+  centerX: number,
+  centerY: number,
+  glyph: string,
+  labelText: string,
+  radius: number,
+): { container: Container; label: Text; chip: Graphics } {
+  const container = new Container({ label: `room-icon-${labelText}` })
+  container.position.set(centerX, centerY)
+  container.alpha = ROOM_ICON_IDLE_ALPHA
+  container.eventMode = 'static'
+  container.cursor = 'pointer'
+  // A generously-sized invisible hit area beyond the visible chip —
+  // matches RoomHotspotIcon's own "generous, non-pixel-perfect target"
+  // approach for desktop hover precision and touch forgiveness.
+  container.hitArea = new Rectangle(-radius * 1.6, -radius * 1.6, radius * 3.2, radius * 3.2)
+
+  const chip = new Graphics()
+  drawExpandingFrame(chip, radius, 0)
+  const glyphText = new Text({ text: glyph, style: { fontSize: radius * 1.2 } })
+  glyphText.anchor.set(0.5)
+  container.addChild(chip, glyphText)
+
+  // Left-anchored. `chip` (above) is redrawn every tick to grow out and
+  // actually CONTAIN this text as one pill — see drawExpandingFrame's own
+  // doc comment for why the frame can't just be a fixed circle with the
+  // label floating next to it.
+  const label = new Text({
+    text: labelText,
+    style: { fontSize: 14, fill: 0xffffff, fontWeight: '600' },
+  })
+  label.anchor.set(0, 0.5)
+  label.position.set(centerX + radius + ICON_LABEL_GAP, centerY)
+  label.alpha = 0
+
+  return { container, label, chip }
+}
+
+/**
+ * Adds one always-visible room hotspot icon (same interaction language as
+ * setupTvInteraction: always shown, brightens + reveals a label sideways
+ * on hover, click/tap to activate) that opens a close-up via `onActivate`
+ * — the caller decides what that means (enter a DOM close-up state, in
+ * RoomCanvas's case — see the HOTSPOTS/useRoomHotspotInteraction wiring
+ * in the component below).
+ */
+function setupRoomIconInteraction(
+  layers: RoomLayers,
+  application: Application,
+  centerX: number,
+  centerY: number,
+  glyph: string,
+  labelText: string,
+  getOnActivate: () => () => void,
+  radius: number,
+): () => void {
+  const { container: icon, label, chip } = buildRoomIcon(centerX, centerY, glyph, labelText, radius)
+  layers.lighting.addChild(icon, label)
+
+  let targetLabelAlpha = 0
+  function tick() {
+    const labelDiff = targetLabelAlpha - label.alpha
+    label.alpha = Math.abs(labelDiff) < 0.004 ? targetLabelAlpha : label.alpha + labelDiff * TV_GLOW_EASE
+    // The frame itself grows to actually CONTAIN the label as one pill —
+    // see drawExpandingFrame's own doc comment.
+    drawExpandingFrame(chip, radius, label.alpha * (ICON_LABEL_GAP + label.width + ICON_LABEL_END_PADDING))
+    const targetScale = targetLabelAlpha > 0 ? ROOM_ICON_HOVER_SCALE : 1
+    const newScale = icon.scale.x + (targetScale - icon.scale.x) * TV_GLOW_EASE
+    icon.scale.set(newScale)
+  }
+  application.ticker.add(tick)
+
+  function handleOver() {
+    targetLabelAlpha = 1
+  }
+  function handleOut() {
+    targetLabelAlpha = 0
+  }
+  function handleTap() {
+    getOnActivate()()
+  }
+  icon.on('pointerover', handleOver)
+  icon.on('pointerout', handleOut)
+  icon.on('pointertap', handleTap)
+
+  return () => {
+    application.ticker.remove(tick)
+    icon.off('pointerover', handleOver)
+    icon.off('pointerout', handleOut)
+    icon.off('pointertap', handleTap)
+    icon.destroy({ children: true })
+    label.destroy()
   }
 }
 
@@ -388,6 +672,33 @@ const MONITOR_GLOW_REGION = { centerX: 734, centerY: 330, width: 90, height: 60 
 const MONITOR_GLOW_COLOR = 0xcfe6ff
 const MONITOR_GLOW_MAX_ALPHA = 0.5 // relative to the TV's own full-strength glow — see the tick function
 
+// The Gaming icon's own position — DELIBERATELY separate from
+// MONITOR_GLOW_REGION above (which stays exactly as it was, per "don't
+// reposition anything without a genuinely identified issue" — it's a
+// different effect, the lamp-off night ambience glow, not this icon).
+// Real device testing found the icon sitting too low, around the chair/
+// desk-surface area rather than on the monitor itself — re-measured
+// directly against furniture_desk.png (1183x788): the screen's own
+// content (cropped/verified directly) centers at roughly (700, 200) in
+// that texture, i.e. x_frac=0.592, y_frac=0.254 of the sprite's own
+// rendered box. Converting through the desk sprite's actual placement
+// (roomAssets.ts: position 734,396, anchor bottom-center, width 337.92,
+// height 225.28 — so its rendered box spans x:[565.04, 902.96],
+// y:[170.72, 396]) gives world coordinates of roughly (765, 228), well
+// above and slightly right of the old (734, 330) — squarely on the
+// monitor screen rather than near the desk surface below it.
+const GAMING_ICON_POSITION = { x: 765, y: 228 }
+
+// Kitchen (fridge/stove) and Door icon world positions — measured
+// directly against public/room/environment/room_environment_base.png
+// (3344x1882, the same master the Pixi environment sprite renders at
+// full world size, so source-pixel/3344*1600 and /1882*900 convert
+// directly to world units): the fridge/stove cluster sits at roughly
+// (3060, 776) source px, the front door at roughly (2374, 1438) source
+// px, in that background art.
+const KITCHEN_ICON_POSITION = { x: 1464, y: 371 }
+const DOOR_ICON_POSITION = { x: 1136, y: 687 }
+
 /**
  * Wires up the lamp as the room's second interactive furniture piece:
  * hover feedback + a click/tap that toggles `lampOn`/`lampOff` ambience —
@@ -509,6 +820,21 @@ function setupLampInteraction(
   }
 }
 
+// Runtime copies of art-source/LaurUch/*.png — see
+// scripts/optimize-lauruch-assets.mjs for how these are generated
+// (re-encoded to quality JPEG at full resolution, source PNGs untouched).
+// These are CLOSE-UP destinations reached from the existing Pixi main
+// room below — the main room's own environment/furniture/avatar
+// rendering is completely unchanged; only what happens after a hotspot
+// tap is new.
+const LAURUCH_CLOSEUPS: Record<string, { label: string; closeUpSrc: string; ambient: AmbientEffectSpec[] }> = {
+  tv: { label: 'Watch', closeUpSrc: '/lauruch/tv-closeup.jpg', ambient: LAURUCH_TV_AMBIENT },
+  gaming: { label: 'Play', closeUpSrc: '/lauruch/desktop-closeup.jpg', ambient: LAURUCH_DESKTOP_AMBIENT },
+  kitchen: { label: 'Kitchen', closeUpSrc: '/lauruch/kitchen-closeup.jpg', ambient: LAURUCH_KITCHEN_AMBIENT },
+  door: { label: 'Door', closeUpSrc: '/lauruch/door-closeup.jpg', ambient: LAURUCH_DOOR_AMBIENT },
+  garage: { label: 'Garage', closeUpSrc: '/lauruch/garage.jpg', ambient: LAURUCH_GARAGE_AMBIENT },
+}
+
 interface RoomCanvasProps {
   /** Opens Watch Together — the exact same callback CoupleHomePage passes
    * to the accessible "Start Watching" button, so the TV's click/tap and
@@ -529,15 +855,49 @@ interface RoomCanvasProps {
  */
 export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
   const wrapperRef = useRef<HTMLDivElement>(null)
-  // The effect below runs once ([] deps — see the StrictMode note just
-  // inside it) and reads this ref rather than closing over `onOpenWatch`
-  // directly, so the TV's click handler (set up once) always calls
-  // whatever the CURRENT prop value is, not whatever it happened to be
-  // the moment the room first mounted.
+  // Warms the browser's own image cache for every LaurUch close-up up
+  // front, not lazily per-hotspot — real-device testing found a brief
+  // flash of the Pixi canvas (avatars included) showing through a
+  // freshly-switched close-up (Door -> Garage especially, which has no
+  // "entering" phase of its own to piggyback a preload on — see
+  // switchHotspot's own doc comment) while its image was still being
+  // fetched/decoded for the first time. `RoomCloseUp`'s own `<img>` will
+  // resolve straight from cache once this has already run, regardless of
+  // which hotspot/direction actually triggers it. A plain `Image()`
+  // fetch — no DOM insertion needed, and CozyLoftRoom.tsx's own
+  // preload-video pattern is the same "warm the fetch/decode early"
+  // idea, just for a resource type that already has a real HTML element
+  // to attach to.
+  useEffect(() => {
+    for (const closeUp of Object.values(LAURUCH_CLOSEUPS)) {
+      const image = new Image()
+      image.src = closeUp.closeUpSrc
+    }
+  }, [])
+  // Shows the shared GamingActivity as a DOM overlay above the canvas —
+  // see setupRoomIconInteraction's own doc comment for why Couple Home
+  // reuses the exact same Gaming implementation as Cozy Loft/After Hours
+  // rather than a Pixi-native one. This is the SAME reusable room/
+  // entering/closeup/leaving state machine CozyLoftRoom.tsx/
+  // AfterHoursRoom.tsx already use — knows nothing about Pixi, so it
+  // works identically here even though the "room" itself is a canvas
+  // rather than a DOM world.
+  const { phase, enterHotspot, leaveHotspot, switchHotspot } = useRoomHotspotInteraction()
+  // The Pixi setup effect below runs once ([] deps — see the StrictMode
+  // note just inside it) and reads these refs rather than closing over
+  // the hook's return values directly, so each icon's tap handler (set up
+  // once) always calls whatever is CURRENT, not whatever it happened to
+  // be the moment the room first mounted (enterHotspot/leaveHotspot are
+  // plain functions from useRoomHotspotInteraction, not memoized, so they
+  // get a new identity every render).
   const onOpenWatchRef = useRef(onOpenWatch)
   useEffect(() => {
     onOpenWatchRef.current = onOpenWatch
   }, [onOpenWatch])
+  const enterHotspotRef = useRef(enterHotspot)
+  useEffect(() => {
+    enterHotspotRef.current = enterHotspot
+  }, [enterHotspot])
 
   useEffect(() => {
     const wrapper = wrapperRef.current
@@ -552,6 +912,9 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
     let resizeObserver: ResizeObserver | null = null
     let avatarCleanup: (() => void) | null = null
     let tvCleanup: (() => void) | null = null
+    let gamingCleanup: (() => void) | null = null
+    let kitchenCleanup: (() => void) | null = null
+    let doorCleanup: (() => void) | null = null
     let lampCleanup: (() => void) | null = null
     let pinchCleanup: (() => void) | null = null
 
@@ -586,6 +949,13 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
       application.stage.addChild(world)
       const layers = createRoomLayers(world)
 
+      // Checked once for this canvas's whole mounted lifetime — see
+      // isMobileViewport's own doc comment for why a live-responsive
+      // version isn't needed here, consistent with how the rest of this
+      // scene already treats content sizing as fixed rather than
+      // continuously breakpoint-aware.
+      const iconRadius = isMobileViewport() ? ICON_RADIUS_MOBILE : ICON_RADIUS_DESKTOP
+
       // --- Production environment backplate ---
       // The master art's own aspect ratio (3344x1882 ≈ 1.777) already
       // matches the 1600x900 world (1.778) to within a fraction of a
@@ -617,12 +987,23 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
         if (cancelled) return
 
         // The TV is the room's first interactive furniture piece — see
-        // setupTvInteraction's own docs for the hover-glow/click design
-        // and why it shares Couple Home's existing Watch Together
-        // navigation rather than inventing a second path.
+        // setupTvInteraction's own docs for the hover-glow/click design.
+        // Tapping it now enters the same room/entering/closeup/leaving
+        // state machine every other hotspot uses (see enterHotspotRef)
+        // rather than jumping straight to Watch Together — the TV close-up
+        // (lauruch/tv-closeup.jpg) shows first, matching Cozy Loft/After
+        // Hours' own TV flow; onOpenWatch itself is now called from that
+        // close-up's own "Continue with YouTube" button (see this
+        // component's render).
         const tvSprite = furnitureSprites.find((sprite) => sprite.label === 'tv')
         if (tvSprite) {
-          tvCleanup = setupTvInteraction(tvSprite, layers, application, () => onOpenWatchRef.current)
+          tvCleanup = setupTvInteraction(
+            tvSprite,
+            layers,
+            application,
+            () => () => enterHotspotRef.current('tv'),
+            iconRadius,
+          )
         }
 
         // The lamp is the second — see setupLampInteraction's own docs for
@@ -631,6 +1012,45 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
       } catch (error) {
         console.warn('Our Space: room furniture could not load.', error)
       }
+
+      // Gaming/Kitchen/Door icons — independent of the furniture load
+      // above (each is positioned at a fixed, hand-measured world region,
+      // not a furniture sprite's own bounds — see setupRoomIconInteraction's
+      // doc comment), so they're set up unconditionally rather than only
+      // on a successful furniture load. Each just enters the shared
+      // hotspot state machine for its own id — Garage has no icon of its
+      // own here, it's reached via the Door close-up's "Other Spaces"
+      // navigation (see this component's render).
+      gamingCleanup = setupRoomIconInteraction(
+        layers,
+        application,
+        GAMING_ICON_POSITION.x,
+        GAMING_ICON_POSITION.y,
+        '🎮',
+        'Play',
+        () => () => enterHotspotRef.current('gaming'),
+        iconRadius,
+      )
+      kitchenCleanup = setupRoomIconInteraction(
+        layers,
+        application,
+        KITCHEN_ICON_POSITION.x,
+        KITCHEN_ICON_POSITION.y,
+        '🍳',
+        'Kitchen',
+        () => () => enterHotspotRef.current('kitchen'),
+        iconRadius,
+      )
+      doorCleanup = setupRoomIconInteraction(
+        layers,
+        application,
+        DOOR_ICON_POSITION.x,
+        DOOR_ICON_POSITION.y,
+        '🚪',
+        'Door',
+        () => () => enterHotspotRef.current('door'),
+        iconRadius,
+      )
 
       // --- Room Avatars ---
       // Runs independently of everything above: if the production art
@@ -814,8 +1234,27 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
       // reset zoomFactor — resizing (e.g. a phone rotation) shouldn't
       // silently undo a pinch the user just did.
       function applyCameraFrame() {
-        const rect = wrapperRef.current?.getBoundingClientRect()
-        if (!rect || rect.width === 0 || rect.height === 0) return
+        const wrapper = wrapperRef.current
+        if (!wrapper) return
+        // `offsetWidth`/`offsetHeight` (layout box size), NOT
+        // `getBoundingClientRect()` (post-transform, rendered size) — see
+        // useRoomCameraGestures.ts's own doc comment on `currentViewport`
+        // for the exact bug this fixes: a freshly-mounted room's wrapper
+        // can sit inside RoomExperience.module.css's `.roomSlot` while its
+        // own `room-expand-in` CSS transform animation (scale 0.92 -> 1)
+        // is still running. Sampling the TRANSFORMED size at that instant
+        // bakes a too-small viewport into computeCameraFrame below, and
+        // since a pure CSS transform never changes layout, the
+        // ResizeObserver watching this element never fires once the
+        // animation ends to correct it — the room stays visibly
+        // mis-fitted (exposed background at the edges) until something
+        // else remounts it fresh (a reload, which never hits this
+        // animation at all — exactly the reported symptom).
+        // `offsetWidth`/`offsetHeight` reflect the element's own LAYOUT
+        // size, which an ancestor's `transform` never touches.
+        const width = wrapper.offsetWidth
+        const height = wrapper.offsetHeight
+        if (width === 0 || height === 0) return
 
         // Resizes the actual renderer surface to match the wrapper's real
         // pixel size. Without this, the canvas stays at Pixi's default
@@ -823,10 +1262,10 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
         // and it would silently break the cover-fit/min-scale camera math
         // below, which must be computed against the true surface size,
         // not a fixed default.
-        application.renderer.resize(rect.width, rect.height)
+        application.renderer.resize(width, height)
 
-        baseScale = computeCameraFrame(rect.width, rect.height).scale
-        applyScale(rect.width, rect.height)
+        baseScale = computeCameraFrame(width, height).scale
+        applyScale(width, height)
       }
 
       // Rescales around a fixed SCREEN-space focal point (the pinch
@@ -975,6 +1414,9 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
       cancelled = true
       avatarCleanup?.()
       tvCleanup?.()
+      gamingCleanup?.()
+      kitchenCleanup?.()
+      doorCleanup?.()
       lampCleanup?.()
       pinchCleanup?.()
       resizeObserver?.disconnect()
@@ -982,11 +1424,173 @@ export function RoomCanvas({ onOpenWatch }: RoomCanvasProps) {
     }
   }, [])
 
-  // Still hidden from assistive tech, aria-hidden and role="presentation" —
-  // the canvas has one real interactive object now (the TV, see
-  // setupTvInteraction above), but it's a graphical shortcut to a flow
-  // that's already fully reachable and screen-reader-accessible through
-  // CoupleHomePage's "Start Watching" button, not a second, independent
-  // path assistive tech would need its own way into.
-  return <div ref={wrapperRef} className={styles.wrapper} role="presentation" aria-hidden="true" />
+  const showCloseUp = phase.status === 'closeup' || phase.status === 'leaving'
+  const activeHotspotId = phase.status !== 'room' ? phase.hotspotId : undefined
+  const activeCloseUp = activeHotspotId ? LAURUCH_CLOSEUPS[activeHotspotId] : undefined
+
+  // The OUTGOING close-up of a direct switch (Door -> Garage, or back),
+  // kept mounted as a purely visual, non-interactive backdrop
+  // (RoomCloseUpBackdrop) directly UNDERNEATH the incoming one for the
+  // switch animation's own duration — see RoomCloseUpBackdrop's own doc
+  // comment for exactly why this exists: real-device testing still found
+  // an occasional flash of the room/avatars through a direct switch even
+  // with the incoming close-up's own opacity/background already fixed,
+  // which points at paint/compositing timing (GPU layer promotion for a
+  // freshly-mounted element, in particular) rather than anything CSS
+  // alone can guarantee away. The outgoing close-up's own image is
+  // PROVABLY already decoded and painted — it was the visible one an
+  // instant ago — so keeping it mounted as a safety net removes that
+  // risk structurally instead of trying to out-tune it with more CSS.
+  //
+  // Detected and applied DURING render (comparing against a ref of the
+  // previous render's own hotspotId, React's own documented pattern for
+  // "adjust state during rendering") rather than in a useEffect — an
+  // effect runs AFTER the DOM has already committed/painted once, which
+  // would let the browser paint a frame with ONLY the incoming close-up
+  // before the backdrop effect even runs; doing it during render means
+  // React discards that in-between render entirely and the backdrop is
+  // present from the very first commit of the switch.
+  const [outgoingHotspotId, setOutgoingHotspotId] = useState<string | null>(null)
+  const previousActiveHotspotIdRef = useRef<string | undefined>(undefined)
+  const viaSwitch = phase.status === 'closeup' && phase.viaSwitch === true
+  // Reading/writing a ref during render is React's own documented pattern
+  // for exactly this — "storing information from previous renders" (see
+  // react.dev/reference/react/useState#storing-information-from-previous-renders)
+  // — not a mistake; a generic lint rule can't tell this apart from an
+  // actual misuse, since the ref here isn't used for anything the JSX
+  // below reads directly (only `setOutgoingHotspotId`'s resulting STATE
+  // is).
+  // eslint-disable-next-line react/refs
+  if (activeHotspotId !== previousActiveHotspotIdRef.current) {
+    // eslint-disable-next-line react/refs
+    if (viaSwitch && previousActiveHotspotIdRef.current && activeHotspotId) {
+      // eslint-disable-next-line react/refs
+      setOutgoingHotspotId(previousActiveHotspotIdRef.current)
+    }
+    previousActiveHotspotIdRef.current = activeHotspotId
+  }
+  const outgoingCloseUp = outgoingHotspotId ? LAURUCH_CLOSEUPS[outgoingHotspotId] : undefined
+  // Removed after the switch's own visual duration — see
+  // RoomCloseUp.module.css's `.switching` keyframe (300ms); a small
+  // buffer keeps this from being torn down a frame before the incoming
+  // close-up has visibly finished settling.
+  useEffect(() => {
+    if (outgoingHotspotId === null) return
+    const timeoutId = window.setTimeout(() => setOutgoingHotspotId(null), 350)
+    return () => window.clearTimeout(timeoutId)
+  }, [outgoingHotspotId])
+
+  // The Door close-up's "Other Spaces" navigation — reuses the exact same
+  // HallwayNavigation/destination-list component After Hours' hallway
+  // uses, just with LaurUch's own (currently: one) real destination.
+  //
+  // A DIRECT close-up-to-close-up transition (switchHotspot), not the
+  // earlier leave-then-re-enter-after-a-timeout approach this replaced:
+  // that older version called leaveHotspot() (which starts the normal
+  // 'leaving' -> 650ms timeout -> 'room' sequence) and then re-entered
+  // 'garage' from a SECOND timeout racing the first — which meant phase
+  // genuinely passed through `{status: 'room'}` for a moment (the main
+  // room would flash visible between Door and Garage on a slow enough
+  // frame) and needed a brittle "+50ms" buffer to even reliably win that
+  // race. switchHotspot changes hotspotId in ONE synchronous update while
+  // staying in `'closeup'` the whole time — phase.status is never 'room'
+  // at any point in this transition, by construction, not by timing luck.
+  // The visual "short zoom" handoff instead comes from RoomCloseUp being
+  // re-keyed by hotspotId below, which makes React remount it and replay
+  // its OWN existing enter animation — reusing the same transition
+  // language the room already uses elsewhere, not a new one.
+  function goToGarageFromDoor() {
+    switchHotspot('garage', 'door')
+  }
+  const otherSpacesDestinations = [{ id: 'garage', label: 'Garage', icon: '🚗', onSelect: goToGarageFromDoor }]
+
+  // Only set once a close-up's phase actually records where it was
+  // switched in from (see switchHotspot/cameFrom) — every other close-up
+  // keeps RoomCloseUp's own default "Back to Room" wording.
+  const cameFrom = phase.status === 'closeup' ? phase.cameFrom : undefined
+  const backLabel = cameFrom ? `Back to ${LAURUCH_CLOSEUPS[cameFrom]?.label ?? 'Room'}` : undefined
+  // 'switch' (opaque-only, no room-flash) for a close-up reached directly
+  // from another one, in EITHER direction — see types.ts's own doc
+  // comment on `viaSwitch` for why this is a separate flag from
+  // `cameFrom` (which is absent on the Garage -> Door return trip, even
+  // though THAT mount still needs this same treatment). The normal
+  // fade-in otherwise — see RoomCloseUp.tsx's own doc comment on
+  // `transitionStyle`.
+  const transitionStyle = viaSwitch ? 'switch' : 'enter'
+
+  return (
+    <div className={styles.outer}>
+      {/* Still hidden from assistive tech, aria-hidden and
+          role="presentation" — the canvas has several interactive objects
+          now (TV, Gaming, Kitchen, Door), but each is a graphical
+          shortcut to a close-up that's already fully reachable and
+          screen-reader-accessible another way (the close-up overlay
+          below, which is NOT aria-hidden, has its own real buttons), not
+          a second, independent path assistive tech would need its own
+          way into. */}
+      <div ref={wrapperRef} className={styles.wrapper} role="presentation" aria-hidden="true" />
+
+      {/* The outgoing close-up's own opaque, non-interactive backdrop —
+          rendered BEFORE (so it paints underneath) the incoming
+          RoomCloseUp below. See outgoingHotspotId's own doc comment. */}
+      {outgoingCloseUp && <RoomCloseUpBackdrop imageSrc={outgoingCloseUp.closeUpSrc} />}
+
+      {/* The shared close-up shell — same component Cozy Loft/After Hours
+          use, just with LaurUch's own images/ambience. Not portaled itself
+          (RoomCloseUp's own "Back to Room" button already portals to
+          <body>, which is what actually needs to escape this component's
+          transformed ancestors). */}
+      {showCloseUp && activeHotspotId && activeCloseUp && (
+        <RoomCloseUp
+          // Re-keyed by hotspotId so a direct close-up-to-close-up switch
+          // (goToGarageFromDoor -> switchHotspot) forces a real remount —
+          // see goToGarageFromDoor's own doc comment for why that's what
+          // supplies this transition's visual "short zoom," reusing
+          // RoomCloseUp's existing mount animation rather than a new one.
+          // Never changes for the normal room->closeup->leaving->room
+          // flow (hotspotId is stable across those phases), so nothing
+          // about the existing per-hotspot animation is affected.
+          key={activeHotspotId}
+          imageSrc={activeCloseUp.closeUpSrc}
+          label={activeCloseUp.label}
+          onBack={leaveHotspot}
+          backLabel={backLabel}
+          isLeaving={phase.status === 'leaving'}
+          transitionStyle={transitionStyle}
+          wideActivity={activeHotspotId === 'gaming'}
+          ambientEffects={<AmbientEffectsLayer effects={activeCloseUp.ambient} />}
+          // Physically accepted on TV first (see RoomCloseUp's own
+          // `enableDirectDrag` doc comment); this ONE shared call site
+          // renders every LaurUch close-up (TV/Gaming/Kitchen/Door/
+          // Garage), so promoting it here covers all of them without a
+          // per-hotspot condition.
+          enableDirectDrag
+        >
+          {activeHotspotId === 'tv' && <LauruchTvActivity onOpenWatch={() => onOpenWatchRef.current()} />}
+          {activeHotspotId === 'gaming' && <GamingActivity />}
+          {activeHotspotId === 'door' && <HallwayNavigation destinations={otherSpacesDestinations} />}
+          {/* Kitchen/Garage: no activity children at all — pure
+              exploration spaces, intentionally with no gameplay/
+              customization UI yet. */}
+        </RoomCloseUp>
+      )}
+    </div>
+  )
+}
+
+/** Identical in spirit to CozyLoftRoom's/AfterHoursRoom's own TvActivity —
+ * a doorway into the EXISTING Watch Together capability, not a
+ * reimplementation. Kept local (not the shared component) since each
+ * room's version is a tiny, already-duplicated three-line panel — see
+ * AfterHoursRoom.tsx's own doc comment on this same tradeoff. */
+function LauruchTvActivity({ onOpenWatch }: { onOpenWatch: () => void }) {
+  return (
+    <div className={styles.activityPanel}>
+      <h3 className={styles.activityTitle}>Watch Together</h3>
+      <button type="button" className={styles.activityPrimaryButton} onClick={onOpenWatch}>
+        ▶ Continue with YouTube
+      </button>
+      <p className={styles.activityNote}>More providers coming soon.</p>
+    </div>
+  )
 }

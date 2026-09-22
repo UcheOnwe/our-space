@@ -43,6 +43,16 @@ function readCamera() {
 }
 
 beforeEach(() => {
+  // `offsetWidth`/`offsetHeight`, not just `getBoundingClientRect` — see
+  // useRoomCameraGestures.ts's own doc comment on `currentViewport`: SIZE
+  // is read via the former (immune to an ancestor's CSS transform) since a
+  // real "room mis-fitted until reload" bug traced back to
+  // getBoundingClientRect reporting a transform-shrunk size at mount time
+  // — the one change kept from this hook's own mobile-camera correction
+  // passes; everything else here tests the reverted, last-known-good
+  // gesture behavior.
+  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(VIEWPORT.width)
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(VIEWPORT.height)
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
     width: VIEWPORT.width,
     height: VIEWPORT.height,

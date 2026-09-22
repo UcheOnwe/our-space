@@ -56,9 +56,22 @@ class RoomGalleryViewTests(APITestCase):
         self.assertTrue(couple_home["is_owned"])
         self.assertTrue(couple_home["is_active"])
         self.assertEqual(couple_home["price"], 0)
+        self.assertEqual(couple_home["display_name"], "Lauruch Loft")
         self.assertFalse(cozy_loft["is_owned"])
         self.assertFalse(cozy_loft["is_active"])
         self.assertEqual(cozy_loft["price"], 2500)
+
+    def test_default_gallery_shows_after_hours_locked_at_5000(self):
+        make_paired_couple()
+        self.client.login(username="alice", password="a-strong-password-1")
+
+        response = self.client.get(GALLERY_URL)
+
+        after_hours = find_room(response.data, "after_hours")
+        self.assertEqual(after_hours["display_name"], "After Hours")
+        self.assertFalse(after_hours["is_owned"])
+        self.assertFalse(after_hours["is_active"])
+        self.assertEqual(after_hours["price"], 5000)
 
     def test_gallery_is_ordered_by_the_catalogs_order_field(self):
         make_paired_couple()
@@ -155,6 +168,44 @@ class PurchaseRoomViewTests(APITestCase):
         self.client.post(PURCHASE_URL, {"room_type": "cozy_loft"})
 
         self.assertEqual(CoupleWallet.objects.get(couple=couple).balance, 2500)
+
+
+class PurchaseAfterHoursViewTests(APITestCase):
+    """Mirrors PurchaseRoomViewTests' distinct cases for the 5,000-Uchem
+    After Hours room via the same generic purchase endpoint."""
+
+    def test_successful_purchase_returns_the_updated_gallery(self):
+        _, _, couple = make_paired_couple()
+        credit_couple_wallet(couple, 5000, TransactionReason.COUPLE_CONTRIBUTION, "seed")
+        self.client.login(username="alice", password="a-strong-password-1")
+
+        response = self.client.post(PURCHASE_URL, {"room_type": "after_hours"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        after_hours = find_room(response.data, "after_hours")
+        self.assertTrue(after_hours["is_owned"])
+        self.assertTrue(after_hours["is_active"])
+        self.assertEqual(CoupleWallet.objects.get(couple=couple).balance, 0)
+
+    def test_insufficient_uchem_returns_400_and_changes_nothing(self):
+        _, _, couple = make_paired_couple()
+        credit_couple_wallet(couple, 4999, TransactionReason.COUPLE_CONTRIBUTION, "seed")
+        self.client.login(username="alice", password="a-strong-password-1")
+
+        response = self.client.post(PURCHASE_URL, {"room_type": "after_hours"})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(CoupleWallet.objects.get(couple=couple).balance, 4999)
+
+    def test_repeated_purchase_via_the_api_only_charges_once(self):
+        _, _, couple = make_paired_couple()
+        credit_couple_wallet(couple, 5000, TransactionReason.COUPLE_CONTRIBUTION, "seed")
+        self.client.login(username="alice", password="a-strong-password-1")
+
+        self.client.post(PURCHASE_URL, {"room_type": "after_hours"})
+        self.client.post(PURCHASE_URL, {"room_type": "after_hours"})
+
+        self.assertEqual(CoupleWallet.objects.get(couple=couple).balance, 0)
 
 
 class SelectActiveRoomViewTests(APITestCase):

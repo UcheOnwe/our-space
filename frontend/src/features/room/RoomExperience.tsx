@@ -3,6 +3,8 @@ import { ApiError } from '../../api/client'
 import { fetchCoupleWallet } from '../uchem/api'
 import { fetchRoomGallery, purchaseRoom, selectActiveRoom } from '../rooms/api'
 import type { RoomGalleryItem } from '../rooms/types'
+import { AfterHoursRoom } from './AfterHoursRoom'
+import type { AfterHoursRoomHandle } from './AfterHoursRoom'
 import { CozyLoftRoom } from './CozyLoftRoom'
 import type { CozyLoftRoomHandle } from './CozyLoftRoom'
 import { RoomCanvas } from './RoomCanvas'
@@ -90,6 +92,7 @@ export const RoomExperience = forwardRef<RoomExperienceHandle, RoomExperiencePro
   const [actionError, setActionError] = useState<string | null>(null)
   const transitionTimeoutRef = useRef<number | null>(null)
   const cozyLoftRef = useRef<CozyLoftRoomHandle>(null)
+  const afterHoursRef = useRef<AfterHoursRoomHandle>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -150,9 +153,28 @@ export const RoomExperience = forwardRef<RoomExperienceHandle, RoomExperiencePro
   function returnToActiveRoom() {
     closeGallery()
     cozyLoftRef.current?.returnToRoom()
+    afterHoursRef.current?.returnToRoom()
   }
 
   useImperativeHandle(ref, () => ({ toggleGallery, closeGallery, returnToActiveRoom }))
+
+  /** The hallway's "Lauruch Loft" destination — an in-world shortcut to
+   * the exact same active-room switch the room gallery's own "Enter"
+   * confirm already performs for an owned room (Lauruch Loft/Couple Home
+   * is always owned), reusing selectActiveRoom directly rather than a
+   * parallel navigation path. Mode/transition state stays untouched
+   * (unlike handleConfirm) — this is a direct swap, not a gallery
+   * browse-then-confirm flow. */
+  async function handleNavigateToRoom(roomType: string) {
+    try {
+      const updated = await selectActiveRoom(roomType)
+      setGallery(updated)
+    } catch {
+      // Best-effort: a failed in-world shortcut just leaves the couple in
+      // After Hours — the room gallery remains the reliable fallback path
+      // to switch rooms.
+    }
+  }
 
   async function handleConfirm(room: RoomGalleryItem) {
     if (room.is_active || isSubmitting) return
@@ -199,6 +221,9 @@ export const RoomExperience = forwardRef<RoomExperienceHandle, RoomExperiencePro
         <div className={styles.roomSlot}>
           {activeRoom?.room_type === 'couple_home' && <RoomCanvas onOpenWatch={onOpenWatch} />}
           {activeRoom?.room_type === 'cozy_loft' && <CozyLoftRoom ref={cozyLoftRef} onOpenWatch={onOpenWatch} />}
+          {activeRoom?.room_type === 'after_hours' && (
+            <AfterHoursRoom ref={afterHoursRef} onOpenWatch={onOpenWatch} onNavigateToRoom={handleNavigateToRoom} />
+          )}
         </div>
       )}
 

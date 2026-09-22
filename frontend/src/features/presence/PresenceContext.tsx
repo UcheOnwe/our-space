@@ -19,6 +19,7 @@ export interface ClickRippleState {
 
 interface PresenceState {
   connectionStatus: ConnectionStatus
+  selfUserId: number | null
   selfAvatar: Avatar | null
   partner: PartnerInfo | null
   activeInteraction: ActiveInteraction | null
@@ -53,12 +54,17 @@ function buildSocketUrl(feature: FeatureName): string {
 export function PresenceProvider({ feature, children }: { feature: FeatureName; children: ReactNode }) {
   const [state, setState] = useState<PresenceState>({
     connectionStatus: 'connecting',
+    selfUserId: null,
     selfAvatar: null,
     partner: null,
     activeInteraction: null,
     ripples: [],
   })
   const socketRef = useRef<PresenceSocket | null>(null)
+  // Mirrors state.selfUserId for handlers that need a synchronous read
+  // outside a setState updater (addRipple below is itself a setState call,
+  // so it can't be invoked from inside another updater's function body).
+  const selfUserIdRef = useRef<number | null>(null)
   const lastMoveSentAtRef = useRef(0)
   const hugTimeoutRef = useRef<number | null>(null)
   const nextRippleIdRef = useRef(0)
@@ -78,61 +84,101 @@ export function PresenceProvider({ feature, children }: { feature: FeatureName; 
   }
 
   useEffect(() => {
+    // Connection identity is NOT user identity: this same authenticated
+    // user can have more than one connection open at once (another
+    // device, another tab). The server's own "skip the sender" logic
+    // (see presence/consumers.py) only skips the exact connection that
+    // sent an event — it deliberately does NOT skip this user's OTHER
+    // connections, which legitimately need to know about (say) a
+    // disconnect on connection A while connection B stays open. Every
+    // "who is this event about" payload therefore always carries a real
+    // `userId`, and this is the ONE place that checks it: before this fix,
+    // every handler below just assumed "not from my own socket" meant
+    // "from my partner," which silently broke the instant a user opened
+    // a second connection — their OWN movement from device A would arrive
+    // on device B and get written into `partner` (rendered with the
+    // partner's avatar/color), because nothing ever compared the event's
+    // userId against this client's own. Root cause was entirely here on
+    // the frontend: the backend already sent the correct userId on every
+    // one of these messages the whole time.
+    function isAboutSelf(userId: number, selfUserId: number | null): boolean {
+      return selfUserId !== null && userId === selfUserId
+    }
+
     function handleMessage(message: ServerMessage) {
       switch (message.type) {
         case 'presence.state':
-          setState((prev) => ({ ...prev, selfAvatar: message.self.avatar, partner: message.partner }))
-          break
-        case 'presence.join':
+          selfUserIdRef.current = message.self.userId
           setState((prev) => ({
             ...prev,
-            partner: prev.partner
-              ? { ...prev.partner, online: true, visible: true }
-              : {
-                  userId: message.userId,
-                  avatar: message.avatar,
-                  online: true,
-                  x: 0.5,
-                  y: 0.5,
-                  visible: true,
-                  currentFeature: null,
-                },
+            selfUserId: message.self.userId,
+            selfAvatar: message.self.avatar,
+            partner: message.partner,
           }))
           break
+        case 'presence.join':
+          setState((prev) => {
+            if (isAboutSelf(message.userId, prev.selfUserId)) return prev
+            return {
+              ...prev,
+              partner: prev.partner
+                ? { ...prev.partner, online: true, visible: true }
+                : {
+                    userId: message.userId,
+                    avatar: message.avatar,
+                    online: true,
+                    x: 0.5,
+                    y: 0.5,
+                    visible: true,
+                    currentFeature: null,
+                  },
+            }
+          })
+          break
         case 'presence.move':
-          setState((prev) =>
-            prev.partner
+          setState((prev) => {
+            if (isAboutSelf(message.userId, prev.selfUserId)) return prev
+            return prev.partner
               ? { ...prev, partner: { ...prev.partner, x: message.x, y: message.y, online: true } }
-              : prev,
-          )
+              : prev
+          })
           break
         case 'presence.leave':
-          setState((prev) =>
-            prev.partner ? { ...prev, partner: { ...prev.partner, online: false, visible: true } } : prev,
-          )
+          setState((prev) => {
+            if (isAboutSelf(message.userId, prev.selfUserId)) return prev
+            return prev.partner ? { ...prev, partner: { ...prev.partner, online: false, visible: true } } : prev
+          })
           break
         case 'presence.click':
-          // Only the partner's clicks arrive this way — the server
-          // deliberately doesn't echo a click back to its own sender (see
-          // presence/consumers.py); sendClick below shows that side
-          // optimistically instead of waiting on a round-trip.
+          // Only the partner's clicks should ever produce a ripple here —
+          // the server deliberately doesn't echo a click back to its own
+          // sending CONNECTION (see presence/consumers.py), but a second
+          // connection belonging to the same user is a different
+          // connection and would otherwise get this too; sendClick below
+          // already shows the local click optimistically, so this must
+          // never fire for the user's own click arriving from elsewhere.
+          // Reads the ref (not state) since addRipple is itself a setState
+          // call, which can't be invoked from inside another updater.
+          if (isAboutSelf(message.userId, selfUserIdRef.current)) return
           addRipple(message.x, message.y)
           break
         case 'presence.visibility':
           // Video temporarily covering the partner's avatar — NOT a
           // disconnect. Deliberately does not touch `online`.
-          setState((prev) =>
-            prev.partner
+          setState((prev) => {
+            if (isAboutSelf(message.userId, prev.selfUserId)) return prev
+            return prev.partner
               ? { ...prev, partner: { ...prev.partner, visible: message.state === 'visible' } }
-              : prev,
-          )
+              : prev
+          })
           break
         case 'presence.location':
           // Couple-wide metadata about which feature the partner is
           // currently in — only meaningful while they're not online here.
-          setState((prev) =>
-            prev.partner ? { ...prev, partner: { ...prev.partner, currentFeature: message.feature } } : prev,
-          )
+          setState((prev) => {
+            if (isAboutSelf(message.userId, prev.selfUserId)) return prev
+            return prev.partner ? { ...prev, partner: { ...prev.partner, currentFeature: message.feature } } : prev
+          })
           break
         case 'interaction.hug':
           if (hugTimeoutRef.current !== null) window.clearTimeout(hugTimeoutRef.current)

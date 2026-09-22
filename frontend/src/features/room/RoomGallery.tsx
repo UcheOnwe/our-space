@@ -1,5 +1,7 @@
+import { AfterHoursRoom } from './AfterHoursRoom'
 import { CozyLoftRoom } from './CozyLoftRoom'
 import { ROOM_POSTER_SRC } from './roomPosters'
+import { RoomPosterPreview } from './RoomPosterPreview'
 import type { RoomGalleryItem } from '../rooms/types'
 import styles from './RoomGallery.module.css'
 
@@ -15,20 +17,28 @@ interface RoomGalleryProps {
   error: string | null
 }
 
-/** Renders one room's full-size hero preview. Couple Home uses its
- * existing static backplate image (no live Pixi instance — a second
- * simultaneous Application is unnecessary cost for a browsing preview).
- * Cozy Loft reuses the actual live video component, `enableHotspots=false`
- * — someone deciding whether to spend Uchem on this room still needs to
- * be able to pan around and inspect all of it first (the same bounded
- * camera the live room uses, not a separate one — see CozyLoftRoom.tsx's
- * own doc comment), just without the TV/Gaming hotspots or the ability to
- * enter a close-up while merely browsing. See roomPosters.ts's own doc
- * comment for why there's no static poster for Cozy Loft instead. */
+/** Renders one room's full-size hero preview. Couple Home (Lauruch Loft)
+ * uses its existing static backplate image — no live Pixi instance (a
+ * second simultaneous Application is unnecessary cost for a browsing
+ * preview) — but wrapped in RoomPosterPreview so it's still explorable
+ * (pan/pinch) rather than locked to one fixed crop, which used to be a
+ * real mobile bug (a plain `<img>` here couldn't be panned the way the
+ * other two rooms' live previews already could). Cozy Loft and After
+ * Hours both reuse their actual live room component, `enableHotspots=false`
+ * — someone deciding whether to spend Uchem on a room still needs to be
+ * able to pan around and inspect all of it first (the same bounded
+ * camera the live room uses, not a separate one — see
+ * CozyLoftRoom.tsx's/AfterHoursRoom.tsx's own doc comments), just without
+ * hotspots or the ability to enter a close-up while merely browsing.
+ * After Hours' preview is cheap (a still image, not a video) so mounting
+ * it alongside Cozy Loft's actual playing video adds negligible cost.
+ * See roomPosters.ts's own doc comment for why there's no static poster
+ * for either of these two instead. */
 function renderRoomPreview(roomType: string) {
   if (roomType === 'cozy_loft') return <CozyLoftRoom enableHotspots={false} />
+  if (roomType === 'after_hours') return <AfterHoursRoom enableHotspots={false} />
   const posterSrc = ROOM_POSTER_SRC[roomType]
-  return posterSrc ? <img className={styles.previewImage} src={posterSrc} alt="" aria-hidden="true" /> : null
+  return posterSrc ? <RoomPosterPreview src={posterSrc} /> : null
 }
 
 function confirmLabel(room: RoomGalleryItem): string {
@@ -72,6 +82,12 @@ export function RoomGallery({ rooms, centeredIndex, onCenterChange, onConfirm, i
         ))}
       </div>
 
+      {/* Absolutely positioned OVER the hero preview (a translucent
+          gradient scrim behind the bottom content only, not a solid
+          panel) — see .gallery's own `position: sticky` in
+          RoomGallery.module.css for how this whole box (art + overlaid
+          controls together) stays reachable regardless of page scroll,
+          without needing a separate control panel below the artwork. */}
       <div className={styles.overlay}>
         <div className={styles.navRow}>
           <button
@@ -138,3 +154,4 @@ export function RoomGallery({ rooms, centeredIndex, onCenterChange, onConfirm, i
     </div>
   )
 }
+

@@ -1,0 +1,130 @@
+/* A normal, absolutely-positioned descendant of whichever wrapper
+   renders this (RoomPosterPreview's/RoomCloseUp's own `.wrapper`/
+   `.viewport`) — NOT `position: fixed`, NOT portaled. It scrolls away
+   with the room content exactly like the rest of that box, which is the
+   known, previously-accepted behavior for this control. */
+.cluster {
+  position: absolute;
+  right: 16px;
+  bottom: calc(var(--analog-bottom-offset, 16px));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 10;
+}
+
+/* Mobile-first sizing: large enough for a comfortable thumb. Desktop
+   (below) shrinks it to a smaller, more subtle presentation — still
+   discoverable and mouse-operable, never visually competing with the
+   artwork. */
+.base {
+  position: relative;
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  /* Idle: present enough to be discoverable, restrained enough not to sit
+     on top of the artwork like a HUD. */
+  opacity: 0.4;
+  transition: opacity 150ms ease;
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  pointer-events: auto;
+}
+
+.baseActive {
+  opacity: 0.8;
+  cursor: grabbing;
+}
+
+.knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  margin-top: -22px;
+  margin-left: -22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  /* No transition here — this is written to directly on every pointer
+     sample and must never fight a live drag. The base's own opacity
+     transition above is a separate, low-frequency property this doesn't
+     conflict with. */
+  pointer-events: none;
+}
+
+.recenterButton {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  background: rgba(20, 18, 16, 0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.65;
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    opacity 150ms ease,
+    background-color 150ms ease;
+}
+
+.recenterButton:hover,
+.recenterButton:focus-visible {
+  opacity: 1;
+  background: rgba(20, 18, 16, 0.55);
+}
+
+.recenterButton:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+
+/* Desktop: existing mouse/touchpad drag remains the primary interaction
+   (see RoomPosterPreview.tsx/RoomCloseUp.tsx — the pinch/drag handlers
+   aren't removed there) — the analog is available as an optional
+   alternative, sized down so it reads as a subtle extra, never a giant
+   game HUD. */
+@media (min-width: 701px) {
+  .base {
+    width: 72px;
+    height: 72px;
+    opacity: 0.3;
+  }
+
+  .baseActive {
+    opacity: 0.65;
+  }
+
+  .knob {
+    width: 30px;
+    height: 30px;
+    margin-top: -15px;
+    margin-left: -15px;
+  }
+
+  .recenterButton {
+    width: 28px;
+    height: 28px;
+    opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .base {
+    transition: none;
+  }
+}

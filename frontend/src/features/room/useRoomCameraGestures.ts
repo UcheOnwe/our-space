@@ -72,10 +72,36 @@ export function useRoomCameraGestures(wrapperRef: RefObject<HTMLElement | null>,
   const pinchStartDistanceRef = useRef(0)
   const pinchStartZoomRef = useRef(MIN_ZOOM_FACTOR)
 
+  // `offsetWidth`/`offsetHeight` (layout box size), NOT
+  // `getBoundingClientRect()` (post-transform, rendered/visual size) —
+  // fixes a real "room renders mis-fitted until reload" bug: a
+  // freshly-mounted room's wrapper can sit inside an ANCESTOR
+  // (RoomExperience.module.css's `.roomSlot`) that is, at that exact
+  // moment, mid-way through its own `room-expand-in` CSS transform
+  // animation (scale 0.92 -> 1). `getBoundingClientRect()` reports the
+  // CURRENT, transform-affected rendered size — sampling it while that
+  // animation is still at scale(0.92) bakes a too-small viewport into
+  // computeCameraFrame's cover-fit math below, and since a pure CSS
+  // transform never changes an element's LAYOUT box, the ResizeObserver a
+  // few lines down never fires once the animation finishes to correct it
+  // — the room stays mis-fitted until something else (a reload, which
+  // never hits this animation) recomputes it fresh. `offsetWidth`/
+  // `offsetHeight` reflect the element's own LAYOUT size, which an
+  // ancestor's `transform` never touches. This is the ONE change kept
+  // from this hook's own mobile-camera correction passes — confirmed
+  // fixed on a physical device — everything else in this file (the
+  // pointer/gesture handling itself) has been reverted to its
+  // last-known-good, validated-smooth-on-device behavior; see
+  // useIndependentCameraGestures.ts for where any further preview/close-up
+  // specific gesture work now lives instead, so it can never again risk
+  // this hook's own already-correct feel.
   function currentViewport(): { width: number; height: number } | null {
-    const rect = wrapperRef.current?.getBoundingClientRect()
-    if (!rect || rect.width === 0 || rect.height === 0) return null
-    return { width: rect.width, height: rect.height }
+    const wrapper = wrapperRef.current
+    if (!wrapper) return null
+    const width = wrapper.offsetWidth
+    const height = wrapper.offsetHeight
+    if (width === 0 || height === 0) return null
+    return { width, height }
   }
 
   function clampAndCommit() {
