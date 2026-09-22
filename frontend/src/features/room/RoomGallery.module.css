@@ -1,9 +1,22 @@
 /* Same footprint as the full-screen room (see RoomExperience.module.css's
    `.roomSlot` and CozyLoftRoom.module.css's `.wrapper`) — the gallery
    occupies the exact same box, so entering/leaving it never reflows the
-   page around it. */
+   page around it.
+
+   `position: sticky; top: 60px` (60px = CoupleHomeNav's own fixed-bar
+   height, matching CoupleHomePage.module.css's `.page` padding-top) is
+   the actual persistence fix: this whole box — hero art AND its overlaid
+   controls together, see .overlay below — pins just below the nav once
+   scrolling would otherwise carry it off the top of the viewport, instead
+   of the previous-room/next-room arrows and the Enter/Unlock action
+   scrolling away with the page on a short viewport. This replaced an
+   earlier attempt that pulled the controls into their own sticky panel
+   BELOW the artwork — visually wrong (a large separate dark bar) and not
+   what was asked for; the controls belong overlaid on the art, which
+   sticky-on-the-whole-box achieves without splitting anything out. */
 .gallery {
-  position: relative;
+  position: sticky;
+  top: 60px;
   width: 100%;
   height: 62vh;
   min-height: 320px;
@@ -39,20 +52,36 @@
   pointer-events: none;
 }
 
+/* `pointer-events: auto` restores what `.heroSlide` above turns off for
+   every OTHER (non-focused) slide — without this, the visible/focused
+   slide inherited `pointer-events: none` same as the hidden ones, so
+   NOTHING inside it (RoomPosterPreview's pan/pinch, Cozy Loft's and After
+   Hours' own live preview panning, even the confirm button) could ever
+   receive a pointer event, regardless of any pointer-events fix further
+   down the tree. Found by tracing the full ancestor chain after real
+   mobile testing showed the gallery preview still locked despite
+   .overlay's own pointer-events fix (below) being correct in isolation. */
 .heroSlideFocused {
   opacity: 1;
-}
-
-.previewImage {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+  pointer-events: auto;
 }
 
 /* Navigation/info/action UI overlaid on the hero preview — a translucent
    scrim only behind the bottom content, not over the whole preview, so
-   the room itself stays the visually dominant thing on screen. */
+   the room itself stays the visually dominant thing on screen. Persistence
+   across page scroll comes from .gallery's own `position: sticky` above,
+   not from anything here — this stays a plain absolutely-positioned
+   overlay exactly like the original design.
+
+   `pointer-events: none` here (with `auto` restored on the actual
+   controls below) is the fix for a real bug this slice found: this box
+   is `inset: 0`, i.e. it covers the ENTIRE gallery, not just the visible
+   text/button area at the bottom — without this, it silently intercepted
+   every drag/pinch gesture across the WHOLE preview (confirmed live: a
+   room preview's own pan/zoom, Cozy Loft's live video included, never
+   received a single pointer event, since this sat on top of it in paint
+   order the whole time). The visible controls re-enable pointer-events
+   individually so they stay clickable exactly as before. */
 .overlay {
   position: absolute;
   inset: 0;
@@ -64,6 +93,7 @@
   padding: 20px 16px;
   box-sizing: border-box;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0) 55%);
+  pointer-events: none;
 }
 
 /* `◀ Room Name ▶` — arrows immediately around the name, not a separate
@@ -72,6 +102,7 @@
   display: flex;
   align-items: center;
   gap: 14px;
+  pointer-events: auto;
 }
 
 .navButton {
@@ -125,6 +156,7 @@
   color: white;
   font-weight: 600;
   cursor: pointer;
+  pointer-events: auto;
 }
 
 .confirmButton:disabled {
@@ -136,6 +168,7 @@
   display: flex;
   gap: 6px;
   padding: 0;
+  pointer-events: auto;
 }
 
 .dot {

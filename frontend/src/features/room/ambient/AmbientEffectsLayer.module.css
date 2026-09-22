@@ -1,0 +1,97 @@
+/* Sits inside the same pannable world box as the room's own video/image
+   (see CozyLoftRoom.module.css's/AfterHoursRoom.module.css's `.world`) —
+   position: absolute; inset: 0 here is relative to THAT box, not the
+   viewport, so effects pan/zoom with the artwork automatically. */
+.layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.effect {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  border-radius: 50%;
+  /* --ambient-color is set per-instance inline (AmbientEffectsLayer.tsx);
+     animation-duration/-delay are also set inline per-instance so a
+     room's effects don't breathe in lockstep. */
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+
+.glow {
+  background: radial-gradient(circle, var(--ambient-color) 0%, transparent 70%);
+  animation-name: ambient-breathe;
+}
+
+.strip {
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--ambient-color), transparent);
+  filter: blur(2px);
+  animation-name: ambient-breathe;
+}
+
+.flicker {
+  background: radial-gradient(circle, var(--ambient-color) 0%, transparent 65%);
+  animation-name: ambient-flicker;
+  animation-timing-function: linear;
+}
+
+.petal {
+  border-radius: 50% 0 50% 50%;
+  background: var(--ambient-color);
+  opacity: 0;
+  animation-name: ambient-petal-drift;
+  animation-timing-function: linear;
+}
+
+@keyframes ambient-breathe {
+  0%, 100% {
+    opacity: 0.35;
+    transform: translate(-50%, -50%) scale(0.94);
+  }
+  50% {
+    opacity: 0.85;
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+}
+
+/* A less regular cadence than ambient-breathe's smooth sine-like curve —
+   uneven step spacing/heights reads as a small lamp/candle flicker rather
+   than steady mechanical breathing. */
+@keyframes ambient-flicker {
+  0%, 100% { opacity: 0.4; }
+  8% { opacity: 0.75; }
+  18% { opacity: 0.5; }
+  32% { opacity: 0.8; }
+  46% { opacity: 0.45; }
+  60% { opacity: 0.7; }
+  74% { opacity: 0.5; }
+  88% { opacity: 0.78; }
+}
+
+/* A single petal drifting down and slightly sideways, appearing only
+   briefly near the start of a long cycle (see afterHoursAmbience.ts's
+   durationMs for this variant) — "extremely occasional," per the
+   approved scope, achieved purely by how much of the cycle is spent
+   invisible rather than a JS spawn timer. */
+@keyframes ambient-petal-drift {
+  0% { opacity: 0; transform: translate(-50%, -50%) translate(0, 0) rotate(0deg); }
+  4% { opacity: 0.7; }
+  16% { opacity: 0.7; transform: translate(-50%, -50%) translate(6%, 60%) rotate(80deg); }
+  22% { opacity: 0; transform: translate(-50%, -50%) translate(9%, 90%) rotate(120deg); }
+  100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .effect {
+    animation: none !important;
+    opacity: 0.55;
+  }
+  .petal {
+    /* A drifting petal has no meaningful "static" pose worth keeping —
+       reduced motion simply removes it rather than freezing it mid-air. */
+    display: none;
+  }
+}

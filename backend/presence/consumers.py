@@ -17,10 +17,14 @@ CLOSE_INVALID_FEATURE = 4004
 # feature later (e.g. a future Games screen) is a one-line addition here.
 ALLOWED_FEATURES = {"home", "watch"}
 
-# Visibility is about a video temporarily covering the local avatar, not
-# about the connection itself — kept as its own small allowlist, distinct
-# from online/offline.
-ALLOWED_VISIBILITY_STATES = {"visible", "video-hidden"}
+# Visibility is about something temporarily covering/suspending the local
+# avatar, not about the connection itself — kept as its own small
+# allowlist, distinct from online/offline. "video-hidden" is Watch
+# Together's video-covers-avatar case; "game-hidden" is the analogous case
+# for an embedded game/activity player (Gaming) — the real pointer is
+# inside it, so the avatar is concealed and its movement isn't transmitted,
+# without disconnecting or going offline.
+ALLOWED_VISIBILITY_STATES = {"visible", "video-hidden", "game-hidden"}
 
 
 def _group_name(couple_id: int, feature: str) -> str:
@@ -194,7 +198,13 @@ class PresenceConsumer(AsyncJsonWebsocketConsumer):
 
         await self.channel_layer.group_send(
             self.group_name,
-            {"type": "presence.click", "sender_channel": self.channel_name, "x": x, "y": y},
+            {
+                "type": "presence.click",
+                "sender_channel": self.channel_name,
+                "userId": self.user_id,
+                "x": x,
+                "y": y,
+            },
         )
 
     async def _handle_hug(self):
@@ -244,6 +254,19 @@ class PresenceConsumer(AsyncJsonWebsocketConsumer):
     # state (join/move/leave/click/visibility/location — each side applies
     # its own change optimistically, see PresenceContext.tsx), but not for
     # hug, which both partners must see as one shared, synchronized moment.
+    #
+    # The `sender_channel` skip is per-CONNECTION, not per-user: if the same
+    # authenticated user has a second connection open (another device/tab),
+    # that second connection is a different channel_name and is NOT skipped
+    # here — it legitimately receives this broadcast, same as the partner's
+    # connection does. Every payload below therefore always carries the
+    # real `userId` the event is actually about, so the RECEIVING client
+    # (which may be that same user's own other device) can tell "this is
+    # actually about me, from my other connection" apart from "this is
+    # genuinely my partner" — see PresenceContext.tsx's `isAboutSelf` check,
+    # which is what actually enforces that distinction. Never rely on
+    # "not my connection" alone meaning "my partner" — connection identity
+    # and user identity are two different things.
 
     async def presence_join(self, event):
         if event["sender_channel"] == self.channel_name:
@@ -274,7 +297,9 @@ class PresenceConsumer(AsyncJsonWebsocketConsumer):
     async def presence_click(self, event):
         if event["sender_channel"] == self.channel_name:
             return
-        await self.send_json({"type": "presence.click", "x": event["x"], "y": event["y"]})
+        await self.send_json(
+            {"type": "presence.click", "userId": event["userId"], "x": event["x"], "y": event["y"]}
+        )
 
     async def presence_visibility(self, event):
         if event["sender_channel"] == self.channel_name:

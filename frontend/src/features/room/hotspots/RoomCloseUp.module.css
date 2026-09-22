@@ -1,6 +1,22 @@
 .closeUp {
   position: absolute;
   inset: 0;
+  /* Guarantees this box is opaque from the very first painted frame,
+     independent of the image/video inside it having actually decoded and
+     painted yet — real-device testing still found a brief flash of
+     RoomCanvas (including its avatars) through Door -> Garage even after
+     this element's own opacity was fixed to never drop below 1 during a
+     direct switch (see .switching below): the CONTAINER was opaque, but
+     .world/.viewport/.video had no background of their own, so an
+     image that hadn't finished decoding yet left nothing but transparency
+     for the canvas underneath to show through. A plain background color
+     here closes that gap unconditionally — it's covered by the real
+     artwork the instant that paints, and never visible at all once an
+     image is warm in the browser's cache (see RoomCanvas.tsx's own
+     preload of every LaurUch close-up image up front). Same token
+     RoomPosterPreview.module.css/CozyLoftRoom.module.css already use for
+     "content still loading" placeholders. */
+  background: var(--border);
 }
 
 /* One-shot mount/unmount animations (not a class-toggle transition,
@@ -45,6 +61,36 @@
   }
 }
 
+/* For a DIRECT close-up-to-close-up switch (RoomCloseUp.tsx's
+   `transitionStyle="switch"`, e.g. Door -> Garage) — deliberately NO
+   opacity component, unlike .entering above. The caller re-keys this
+   component on every switch, so React unmounts the outgoing instance and
+   mounts this one fresh in the same commit; if this played the same
+   opacity-from-0 fade as a normal entrance, this element's own first
+   painted frame would be fully transparent while the outgoing one has
+   already been removed — exposing the room underneath for a frame, even
+   though the STATE machine's `phase.status` never touches 'room'. Staying
+   opaque throughout (only the scale animates) guarantees this always
+   fully covers the room from its very first frame. */
+.switching {
+  animation: closeup-switch 300ms ease both;
+}
+
+@keyframes closeup-switch {
+  from {
+    transform: scale(1.08);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switching {
+    animation: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .entering,
   .leaving {
@@ -69,6 +115,15 @@
   to {
     opacity: 1;
   }
+}
+
+/* RoomCloseUpBackdrop's own fill — a plain, non-pannable cover-fit box,
+   no touch-action/pointer handling of any kind (see that component's own
+   doc comment for why it's deliberately simpler than .viewport/.world). */
+.backdropFill {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
 }
 
 @keyframes closeup-leave-reduced {
@@ -109,6 +164,17 @@
   object-fit: cover;
 }
 
+/* `pointer-events: none` here (with `auto` restored on `.activity` below)
+   fixes a real mobile bug this slice found: this box is `inset: 0` —
+   it covers the ENTIRE close-up, not just the actual visible
+   activity content — so without this, it silently intercepted every
+   drag/pinch gesture across the WHOLE close-up (confirmed live via
+   `elementFromPoint`: a drag anywhere in a close-up with an activity,
+   even far from the visible cards/panel, hit this transparent box
+   instead of the pannable world underneath it, on EVERY close-up with
+   activity content — Gaming, TV, the hallway/door). `.activity` restores
+   `pointer-events: auto` so its own real content (buttons, game cards,
+   etc.) stays exactly as clickable as before. */
 .overlay {
   position: absolute;
   inset: 0;
@@ -116,6 +182,7 @@
   flex-direction: column;
   padding: 16px;
   box-sizing: border-box;
+  pointer-events: none;
 }
 
 /* Fixed to the true VIEWPORT — rendered via a React portal straight into
@@ -155,4 +222,23 @@
   margin-bottom: auto;
   align-self: center;
   width: min(360px, 90%);
+  /* Re-enables interaction for the actual activity content — see
+     .overlay's own doc comment for why the parent is pointer-events:
+     none. When there's no activity at all (Kitchen/Garage: `children` is
+     empty), this box has nothing in it anyway, so leaving it interactive
+     is harmless — there's nothing here to swallow a gesture. */
+  pointer-events: auto;
+}
+
+/* Opt-in, for activity content that genuinely needs more than the
+   default small centered panel (currently just Gaming's selector/
+   player — see CozyLoftRoom.tsx's `wideActivity` prop). `vh`-based
+   height (not a percentage) deliberately sidesteps this flex column's
+   own percentage-height ambiguity; still leaves visible margin around it
+   (.overlay's own 16px padding, plus whatever's left over) so the
+   gaming-room video stays visible enough that this still reads as
+   "inside the couple's space," not a full-screen takeover. */
+.activityWide {
+  width: min(760px, 94%);
+  height: min(70vh, 600px);
 }

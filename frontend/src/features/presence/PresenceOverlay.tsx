@@ -3,11 +3,13 @@ import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react'
 import { useIsFullscreen } from '../../hooks/useIsFullscreen'
 import { ClickRipple } from './ClickRipple'
 import { DissolveEffect } from './DissolveEffect'
+import { PresenceExclusionZoneContext } from './exclusionZone'
 import { HugAnimation } from './HugAnimation'
 import { MouseSpirit } from './MouseSpirit'
 import { usePresence } from './PresenceContext'
 import { computeSafeHugAnchor } from './sync'
 import { FEATURE_LABELS } from './types'
+import type { Visibility } from './types'
 import styles from './PresenceOverlay.module.css'
 
 interface Point {
@@ -111,9 +113,29 @@ export function PresenceOverlay({ children, suppressZoneElement, fullBleed }: Pr
   // Local video-hover suppression: true once the pointer has rested inside
   // suppressZoneElement for VIDEO_HOVER_DELAY_MS, or while fullscreen.
   const [hoveringVideo, setHoveringVideo] = useState(false)
-  const selfSuppressed = hoveringVideo || isFullscreen
+  // True while the real pointer is inside a registered exclusion zone
+  // (e.g. GamePlayer.tsx's game area) — see the pointerenter/pointerleave
+  // effect below. Distinct reason from hoveringVideo/isFullscreen: this
+  // one also gates movement/click TRANSMISSION (see updateSelfFromClient
+  // and handleClick), not just the local avatar's own rendering.
+  const [insideGameZone, setInsideGameZone] = useState(false)
+  // The one place that decides WHY (if at all) presence is currently
+  // concealed — computed directly rather than as a boolean OR, so the
+  // value actually sent to the partner (see the effect below) always
+  // names the real, specific reason instead of collapsing every case
+  // into a single generic "hidden" state.
+  const visibilityState: Visibility = insideGameZone ? 'game-hidden' : hoveringVideo || isFullscreen ? 'video-hidden' : 'visible'
+  const selfSuppressed = visibilityState !== 'visible'
   const [selfDissolveEffectAt, setSelfDissolveEffectAt] = useState<Point | null>(null)
   const [partnerDissolveEffectAt, setPartnerDissolveEffectAt] = useState<Point | null>(null)
+
+  // The element any embedded activity below this overlay has registered
+  // as a presence exclusion/suspension zone (see exclusionZone.ts's own
+  // doc comment — e.g. GamePlayer.tsx registers its game area). Only its
+  // identity is tracked here; entering/leaving it is detected via the
+  // pointerenter/pointerleave effect below, the same reliable same-origin
+  // mechanism suppressZoneElement's own hover effect already relies on.
+  const [exclusionZoneElement, setExclusionZoneElement] = useState<HTMLElement | null>(null)
 
   useEffect(() => {
     if (partner) {
@@ -196,21 +218,23 @@ export function PresenceOverlay({ children, suppressZoneElement, fullBleed }: Pr
   }, [suppressZoneElement])
 
   // Tells the partner (and shows our own dissolve flourish) whenever our
-  // own suppressed state actually changes — not on every render. This is
+  // own visibility reason actually changes — not on every render. This is
   // the presence.visibility signal, kept entirely separate from
-  // online/offline — see PresenceContext.tsx.
-  const previousSelfSuppressedRef = useRef(selfSuppressed)
+  // online/offline — see PresenceContext.tsx. Keyed off the specific
+  // visibilityState (not a boolean) so the partner is always told the
+  // real reason ('video-hidden' vs 'game-hidden'), never a generic one.
+  const previousVisibilityStateRef = useRef(visibilityState)
   useEffect(() => {
-    if (previousSelfSuppressedRef.current === selfSuppressed) return
-    previousSelfSuppressedRef.current = selfSuppressed
-    sendVisibility(selfSuppressed ? 'video-hidden' : 'visible')
+    if (previousVisibilityStateRef.current === visibilityState) return
+    previousVisibilityStateRef.current = visibilityState
+    sendVisibility(visibilityState)
 
     const point = selfPosRef.current
     setSelfDissolveEffectAt(point)
     const timeoutId = window.setTimeout(() => setSelfDissolveEffectAt(null), DISSOLVE_EFFECT_DURATION_MS)
     return () => window.clearTimeout(timeoutId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selfSuppressed])
+  }, [visibilityState])
 
   // The partner's dissolve flourish, triggered by the same
   // presence.visibility-derived state that already drives their rendered
@@ -242,24 +266,76 @@ export function PresenceOverlay({ children, suppressZoneElement, fullBleed }: Pr
     return { x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) }
   }, [])
 
+  // Computes the self position for a given real pointer location AND
+  // updates/broadcasts it in one step, so every caller (continuous
+  // pointermove and click/tap) reports the exact same point. Callers are
+  // themselves responsible for not calling this while insideGameZone is
+  // true (see the pointermove listener and handleClick below) — this
+  // function doesn't gate on it itself since the exclusion zone's own
+  // pointerleave handler needs to call it exactly once, immediately,
+  // to resume tracking from the real exit position.
+  const updateSelfFromClient = useCallback(
+    (clientX: number, clientY: number): Point | null => {
+      const point = normalizedFromClient(clientX, clientY)
+      if (!point) return null
+      setSelfPos(point)
+      sendMove(point.x, point.y)
+      return point
+    },
+    [normalizedFromClient, sendMove],
+  )
+
   // The ONE listener for continuous desktop movement. Window-level and
   // read-only — it never sits in any element's event path, so it can't
   // block a click on real UI underneath it. Touch is deliberately ignored
   // here: it has no persistent pointer, so its only movement signal is the
   // tap handled by handleClick below, not a dragging/scrolling finger.
+  // Also skipped entirely while insideGameZone — nothing should be
+  // tracked/transmitted while the pointer is inside the game (see
+  // insideGameZone's own doc comment above).
   useEffect(() => {
     function handlePointerMove(event: PointerEvent) {
       if (event.pointerType !== 'mouse') return
-      const point = normalizedFromClient(event.clientX, event.clientY)
-      if (point) {
-        setSelfPos(point)
-        sendMove(point.x, point.y)
-      }
+      if (insideGameZone) return
+      updateSelfFromClient(event.clientX, event.clientY)
     }
 
     window.addEventListener('pointermove', handlePointerMove)
     return () => window.removeEventListener('pointermove', handlePointerMove)
-  }, [normalizedFromClient, sendMove])
+  }, [updateSelfFromClient, insideGameZone])
+
+  // Suspends presence the instant the real cursor crosses into the
+  // registered exclusion zone, and resumes it the instant it crosses back
+  // out — same reliable same-origin pointerenter/pointerleave mechanism
+  // suppressZoneElement's own hover effect already relies on (this window
+  // listener's sibling above genuinely never fires while the cursor is
+  // over a cross-origin iframe's own content, so this is what actually
+  // catches the crossing moment). Entering does NOT reposition/send
+  // anything — it just flips insideGameZone, which hides the local avatar
+  // (via visibilityState/selfSuppressed) and stops the window listener
+  // above from tracking further. Leaving flips it back AND immediately
+  // resumes tracking from the real exit point, so there's no delay before
+  // presence is valid again.
+  useEffect(() => {
+    if (!exclusionZoneElement) return
+
+    function handleEnter(event: PointerEvent) {
+      if (event.pointerType !== 'mouse') return
+      setInsideGameZone(true)
+    }
+    function handleLeave(event: PointerEvent) {
+      if (event.pointerType !== 'mouse') return
+      setInsideGameZone(false)
+      updateSelfFromClient(event.clientX, event.clientY)
+    }
+
+    exclusionZoneElement.addEventListener('pointerenter', handleEnter)
+    exclusionZoneElement.addEventListener('pointerleave', handleLeave)
+    return () => {
+      exclusionZoneElement.removeEventListener('pointerenter', handleEnter)
+      exclusionZoneElement.removeEventListener('pointerleave', handleLeave)
+    }
+  }, [exclusionZoneElement, updateSelfFromClient])
 
   // Video controls always win: a click/tap landing inside the real player
   // bounds is never treated as a presence interaction — it passes through
@@ -268,6 +344,18 @@ export function PresenceOverlay({ children, suppressZoneElement, fullBleed }: Pr
   function isInsideSuppressZone(clientX: number, clientY: number): boolean {
     if (!suppressZoneElement) return false
     const rect = suppressZoneElement.getBoundingClientRect()
+    return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom
+  }
+
+  // Same idea for the game exclusion zone — a tap landing on OUR OWN DOM
+  // inside the game area (e.g. the loading/error text, before the iframe
+  // is ready) shouldn't produce a presence click either. A live geometry
+  // check (not just the insideGameZone boolean) so this also covers
+  // touch, which never fires the pointerenter/pointerleave this component
+  // otherwise relies on for mouse (touch has no hover concept).
+  function isInsideExclusionZone(clientX: number, clientY: number): boolean {
+    if (!exclusionZoneElement) return false
+    const rect = exclusionZoneElement.getBoundingClientRect()
     return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom
   }
 
@@ -288,16 +376,16 @@ export function PresenceOverlay({ children, suppressZoneElement, fullBleed }: Pr
     // the avatar to (0, 0).
     if (event.detail === 0) return
     if (isInsideSuppressZone(event.clientX, event.clientY)) return
+    if (isInsideExclusionZone(event.clientX, event.clientY)) return
 
-    const point = normalizedFromClient(event.clientX, event.clientY)
+    // On desktop this is a no-op-feeling correction (the cursor was
+    // already tracked there via pointermove); on touch it's the only
+    // movement signal there is, since there's no persistent pointer to
+    // follow continuously. A tap landing inside a cross-origin game
+    // iframe never reaches this handler at all (the same browser boundary
+    // that keeps window pointermove from firing there).
+    const point = updateSelfFromClient(event.clientX, event.clientY)
     if (!point) return
-
-    // Also moves the avatar here. On desktop this is a no-op-feeling
-    // correction (the cursor was already tracked there via pointermove);
-    // on touch it's the only movement signal there is, since there's no
-    // persistent pointer to follow continuously.
-    setSelfPos(point)
-    sendMove(point.x, point.y)
     sendClick(point.x, point.y)
   }
 
@@ -324,7 +412,9 @@ export function PresenceOverlay({ children, suppressZoneElement, fullBleed }: Pr
 
   return (
     <div ref={containerRef} className={containerClassName} onClick={handleClick}>
-      {children}
+      <PresenceExclusionZoneContext.Provider value={setExclusionZoneElement}>
+        {children}
+      </PresenceExclusionZoneContext.Provider>
 
       {/* pointer-events: none by default — see PresenceOverlay.module.css.
           This layer sits visually above the real UI without ever

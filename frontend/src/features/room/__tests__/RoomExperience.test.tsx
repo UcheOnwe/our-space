@@ -194,4 +194,39 @@ describe('RoomExperience', () => {
     const balanceCalls = fetchMock.mock.calls.filter(([url]) => url.toString().endsWith('/api/uchem/couple/'))
     expect(balanceCalls).toHaveLength(0)
   })
+
+  it('shows After Hours (all four hotspots) when it is the active room', async () => {
+    const gallery = [
+      { room_type: 'couple_home', display_name: 'Lauruch Loft', order: 0, price: 0, is_owned: true, is_active: false },
+      { room_type: 'after_hours', display_name: 'After Hours', order: 2, price: 5000, is_owned: true, is_active: true },
+    ]
+    stubFetch({ gallery })
+    render(<Harness />)
+
+    expect(await screen.findByRole('button', { name: 'Watch' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Hallway' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Garage' })).toBeInTheDocument()
+  })
+
+  it("the hallway's Lauruch Loft destination switches the active room via select-active, reusing the gallery's own API", async () => {
+    const gallery = [
+      { room_type: 'couple_home', display_name: 'Lauruch Loft', order: 0, price: 0, is_owned: true, is_active: false },
+      { room_type: 'after_hours', display_name: 'After Hours', order: 2, price: 5000, is_owned: true, is_active: true },
+    ]
+    const fetchMock = stubFetch({ gallery })
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await user.click(await screen.findByRole('button', { name: 'Hallway' }))
+    const lauruchLoftButton = await screen.findByRole('button', { name: /Lauruch Loft/ }, { timeout: 2000 })
+    await user.click(lauruchLoftButton)
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/select-active/'),
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ room_type: 'couple_home' }) }),
+      )
+    })
+  })
 })

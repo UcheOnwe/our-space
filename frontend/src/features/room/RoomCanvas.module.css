@@ -1,3 +1,12 @@
+/* Wraps the canvas AND the close-up overlay (RoomCloseUp, when a hotspot
+   is active) in the same box — RoomCloseUp is `position: absolute;
+   inset: 0`, so this just needs to be the containing block for that,
+   matching exactly the box .wrapper's own sizing rules below establish. */
+.outer {
+  position: relative;
+  width: 100%;
+}
+
 .wrapper {
   position: relative;
   width: 100%;
@@ -53,4 +62,48 @@
 
 .wrapper canvas {
   display: block;
+}
+
+/* The TV close-up's "Continue with YouTube" panel — same treatment as
+   CozyLoftRoom.module.css's/AfterHoursRoom.module.css's own
+   .activityPanel (a small intentional duplication, see
+   LauruchTvActivity's own doc comment in RoomCanvas.tsx). */
+.activityPanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px;
+  border-radius: var(--radius);
+  background: rgba(20, 18, 16, 0.55);
+  text-align: center;
+  color: white;
+}
+
+.activityTitle {
+  margin: 0;
+  font-size: 18px;
+}
+
+.activityPrimaryButton {
+  border: none;
+  border-radius: var(--radius);
+  padding: 10px 18px;
+  background: var(--accent);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.activityPrimaryButton:hover,
+.activityPrimaryButton:focus-visible {
+  background: var(--accent-hover);
+}
+
+.activityNote {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.75;
 }

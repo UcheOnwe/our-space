@@ -47,14 +47,43 @@ export function useRoomHotspotInteraction() {
 
   function leaveHotspot() {
     if (phase.status !== 'closeup') return
-    const { hotspotId } = phase
+    const { hotspotId, cameFrom } = phase
+    // Reached this close-up directly from another one (switchHotspot
+    // below) rather than from the plain room — back-navigation returns
+    // there directly, the same direct transition in reverse, never
+    // dropping through 'room' in between. `viaSwitch: true` on the
+    // resulting phase (but deliberately NO `cameFrom`) marks that this
+    // mount still needs the opaque-only switch animation even though its
+    // own back button correctly falls back to "Back to Room" — see
+    // types.ts's own doc comment on why these are separate.
+    if (cameFrom) {
+      setPhase({ status: 'closeup', hotspotId: cameFrom, viaSwitch: true })
+      return
+    }
     setPhase({ status: 'leaving', hotspotId })
     timeoutRef.current = window.setTimeout(() => {
       setPhase({ status: 'room' })
     }, TRANSITION_DURATION_MS)
   }
 
-  return { phase, enterHotspot, leaveHotspot }
+  /**
+   * A direct close-up-to-close-up transition (e.g. Door -> Garage) that
+   * never passes through 'room' — only valid from an existing close-up,
+   * same as leaveHotspot. Unlike enterHotspot, this is a single synchronous
+   * phase update with no 'entering'/timer step of its own: the visual
+   * "short zoom" transition instead comes from the CALLER re-keying its
+   * RoomCloseUp instance by hotspotId (see RoomCanvas.tsx), which replays
+   * RoomCloseUp's own existing mount animation for free — reusing the
+   * same transition language rather than inventing a second one.
+   * `cameFrom` is recorded on the resulting phase so leaveHotspot can
+   * return to it directly (see above).
+   */
+  function switchHotspot(hotspotId: string, cameFrom: string) {
+    if (phase.status !== 'closeup') return
+    setPhase({ status: 'closeup', hotspotId, cameFrom, viaSwitch: true })
+  }
+
+  return { phase, enterHotspot, leaveHotspot, switchHotspot }
 }
 
 export { TRANSITION_DURATION_MS as ROOM_HOTSPOT_TRANSITION_DURATION_MS }

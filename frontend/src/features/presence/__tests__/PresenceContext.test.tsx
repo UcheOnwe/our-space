@@ -132,7 +132,7 @@ describe('PresenceProvider', () => {
     )
     act(() => currentSocket().simulateOpen())
 
-    act(() => currentSocket().simulateMessage({ type: 'presence.click', x: 0.4, y: 0.6 }))
+    act(() => currentSocket().simulateMessage({ type: 'presence.click', userId: 2, x: 0.4, y: 0.6 }))
     expect(screen.getByTestId('ripple-count').textContent).toBe('1')
 
     act(() => vi.advanceTimersByTime(550))
@@ -270,5 +270,188 @@ describe('PresenceProvider', () => {
     act(() => sendVisibilityHolder.current?.('video-hidden'))
 
     expect(currentSocket().sent).toContainEqual(JSON.stringify({ type: 'presence.visibility', state: 'video-hidden' }))
+  })
+
+  // Regression coverage for the same-user/multi-device identity bug: a
+  // user's OWN second connection (another device or browser tab) receives
+  // every one of these broadcasts too (the server only skips the exact
+  // sending CONNECTION, never the sending USER's other connections — see
+  // presence/consumers.py's own doc comment on this). Before this fix,
+  // every handler here assumed "not my own socket" meant "must be my
+  // partner," so User A's own movement/clicks/visibility arriving from
+  // their other device got rendered using User B's (the partner's)
+  // avatar/color. INITIAL_STATE_MESSAGE's self.userId is 1 — every test
+  // below simulates an event claiming userId 1 (i.e. "this is actually
+  // about me, from somewhere else") and asserts it is ignored rather than
+  // corrupting `partner` (userId 2).
+  describe('same-user multi-connection identity (own second device/tab != partner)', () => {
+    it('a presence.move claiming the SELF userId is ignored — never overwrites partner position', () => {
+      render(
+        <PresenceProvider feature="home">
+          <Probe />
+        </PresenceProvider>,
+      )
+      act(() => currentSocket().simulateOpen())
+      act(() => currentSocket().simulateMessage(INITIAL_STATE_MESSAGE))
+
+      // My own PC's movement, echoed to my own mobile connection.
+      act(() => currentSocket().simulateMessage({ type: 'presence.move', userId: 1, avatar: 'A', x: 0.99, y: 0.99 }))
+
+      expect(screen.getByTestId('partner-pos').textContent).toBe('0.3,0.4')
+    })
+
+    it('the real partner\'s move still applies correctly even after a self-echoed move was ignored', () => {
+      render(
+        <PresenceProvider feature="home">
+          <Probe />
+        </PresenceProvider>,
+      )
+      act(() => currentSocket().simulateOpen())
+      act(() => currentSocket().simulateMessage(INITIAL_STATE_MESSAGE))
+
+      act(() => currentSocket().simulateMessage({ type: 'presence.move', userId: 1, avatar: 'A', x: 0.99, y: 0.99 }))
+      act(() => currentSocket().simulateMessage({ type: 'presence.move', userId: 2, avatar: 'B', x: 0.7, y: 0.8 }))
+
+      expect(screen.getByTestId('partner-pos').textContent).toBe('0.7,0.8')
+    })
+
+    it('a presence.click claiming the SELF userId produces no ripple (own click from another device)', () => {
+      vi.useFakeTimers()
+      render(
+        <PresenceProvider feature="home">
+          <Probe />
+        </PresenceProvider>,
+      )
+      act(() => currentSocket().simulateOpen())
+      act(() => currentSocket().simulateMessage(INITIAL_STATE_MESSAGE))
+
+      act(() => currentSocket().simulateMessage({ type: 'presence.click', userId: 1, x: 0.1, y: 0.1 }))
+
+      expect(screen.getByTestId('ripple-count').textContent).toBe('0')
+      vi.useRealTimers()
+    })
+
+    it('a presence.join claiming the SELF userId does not mark the real partner online', () => {
+      render(
+        <PresenceProvider feature="home">
+          <Probe />
+        </PresenceProvider>,
+      )
+      act(() => currentSocket().simulateOpen())
+      act(() => currentSocket().simulateMessage(INITIAL_STATE_MESSAGE))
+      act(() => currentSocket().simulateMessage({ type: 'presence.leave', userId: 2 }))
+      expect(screen.getByTestId('partner-online').textContent).toBe('false')
+
+      // My own second connection joining must not flip the (actually
+      // still-offline) partner back online.
+      act(() => currentSocket().simulateMessage({ type: 'presence.join', userId: 1, avatar: 'A' }))
+
+      expect(screen.getByTestId('partner-online').textContent).toBe('false')
+    })
+
+    it('a presence.join claiming the SELF userId never fabricates a partner out of your own identity', () => {
+      render(
+        <PresenceProvider feature="home">
+          <Probe />
+        </PresenceProvider>,
+      )
+      act(() => currentSocket().simulateOpen())
+      // presence.state with no partner at all yet (never paired-online).
+      act(() =>
+        currentSocket().simulateMessage({ type: 'presence.state', self: { userId: 1, avatar: 'A' }, partner: null }),
+      )
+
+      // A second connection of mine joining must never get mistaken for
+      // "my partner just connected" and create a partner that is really me.
+      act(() => currentSocket().simulateMessage({ type: 'presence.join', userId: 1, avatar: 'A' }))
+
+      expect(screen.getByTestId('partner-online').textContent).toBe('')
+    })
+
+    it('a presence.leave claiming the SELF userId does not mark the real partner offline', () => {
+      render(
+        <PresenceProvider feature="home">
+          <Probe />
+        </PresenceProvider>,
+      )
+      act(() => currentSocket().simulateOpen())
+      act(() => currentSocket().simulateMessage(INITIAL_STATE_MESSAGE))
+      expect(screen.getByTestId('partner-online').textContent).toBe('true')
+
+      // My own OTHER connection disconnecting must not read as "partner left".
+      act(() => currentSocket().simulateMessage({ type: 'presence.leave', userId: 1 }))
+
+      expect(screen.getByTestId('partner-online').textContent).toBe('true')
+    })
+
+    it('a presence.visibility claiming the SELF userId does not change the real partner\'s visibility', () => {
+      render(
+        <PresenceProvider feature="home">
+          <Probe />
+        </PresenceProvider>,
+      )
+      act(() => currentSocket().simulateOpen())
+      act(() => currentSocket().simulateMessage(INITIAL_STATE_MESSAGE))
+
+      act(() => currentSocket().simulateMessage({ type: 'presence.visibility', userId: 1, state: 'video-hidden' }))
+
+      expect(screen.getByTestId('partner-visible').textContent).toBe('true')
+    })
+
+    it('a presence.location claiming the SELF userId does not change the real partner\'s location', () => {
+      render(
+        <PresenceProvider feature="home">
+          <Probe />
+        </PresenceProvider>,
+      )
+      act(() => currentSocket().simulateOpen())
+      act(() => currentSocket().simulateMessage(INITIAL_STATE_MESSAGE))
+
+      act(() => currentSocket().simulateMessage({ type: 'presence.location', userId: 1, feature: 'watch' }))
+
+      expect(screen.getByTestId('partner-feature').textContent).toBe('')
+    })
+
+    it('reconnecting (a fresh presence.state) does not swap self/partner identity', () => {
+      render(
+        <PresenceProvider feature="home">
+          <Probe />
+        </PresenceProvider>,
+      )
+      act(() => currentSocket().simulateOpen())
+      act(() => currentSocket().simulateMessage(INITIAL_STATE_MESSAGE))
+      expect(screen.getByTestId('self-avatar').textContent).toBe('A')
+
+      // A reconnect re-sends presence.state with the same identities —
+      // must land exactly the same way, not swap self/partner.
+      act(() => currentSocket().simulateMessage(INITIAL_STATE_MESSAGE))
+
+      expect(screen.getByTestId('self-avatar').textContent).toBe('A')
+      expect(screen.getByTestId('partner-pos').textContent).toBe('0.3,0.4')
+    })
+
+    it('multiple self-echoed event types in a row never create or corrupt the partner identity', () => {
+      render(
+        <PresenceProvider feature="home">
+          <Probe />
+        </PresenceProvider>,
+      )
+      act(() => currentSocket().simulateOpen())
+      act(() => currentSocket().simulateMessage(INITIAL_STATE_MESSAGE))
+
+      act(() => {
+        currentSocket().simulateMessage({ type: 'presence.move', userId: 1, avatar: 'A', x: 0.01, y: 0.01 })
+        currentSocket().simulateMessage({ type: 'presence.visibility', userId: 1, state: 'video-hidden' })
+        currentSocket().simulateMessage({ type: 'presence.location', userId: 1, feature: 'watch' })
+        currentSocket().simulateMessage({ type: 'presence.click', userId: 1, x: 0.5, y: 0.5 })
+      })
+
+      // Partner (userId 2) is exactly as it was — untouched by any of the
+      // above, which were all really about userId 1 (self).
+      expect(screen.getByTestId('partner-pos').textContent).toBe('0.3,0.4')
+      expect(screen.getByTestId('partner-visible').textContent).toBe('true')
+      expect(screen.getByTestId('partner-feature').textContent).toBe('')
+      expect(screen.getByTestId('ripple-count').textContent).toBe('0')
+    })
   })
 })

@@ -1,0 +1,68 @@
+/* Same dark/translucent "Our Space over the room video" family
+   CozyLoftRoom.module.css's `.activityPanel` and RoomHotspotIcon/
+   RoomCloseUp already use (rgba(20,18,16,X)) — redefined locally rather
+   than sharing a CSS module, matching how those files already do it, so
+   the game selector reads as part of the same room, not a separate
+   generic catalog. */
+.card {
+  display: flex;
+  flex-direction: column;
+  width: 150px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: rgba(20, 18, 16, 0.55);
+  color: white;
+  flex: 0 0 auto;
+}
+
+.artwork {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+}
+
+.name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.description {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  opacity: 0.85;
+  /* Three lines max — a card stays a card, not a paragraph, even for a
+     longer description. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.playButton {
+  align-self: flex-start;
+  margin-top: 2px;
+  border: none;
+  border-radius: var(--radius);
+  padding: 6px 14px;
+  background: var(--accent);
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.playButton:hover,
+.playButton:focus-visible {
+  background: var(--accent-hover);
+}

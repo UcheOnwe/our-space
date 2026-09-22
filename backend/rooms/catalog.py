@@ -22,8 +22,12 @@ class RoomCatalogEntry:
 
 
 ROOM_CATALOG: list[RoomCatalogEntry] = [
-    RoomCatalogEntry(room_type=RoomType.COUPLE_HOME, display_name="Couple Home", order=0, price=0),
+    # Display name only — "Lauruch Loft" is user-facing branding for the
+    # same underlying default room. room_type stays "couple_home" so no
+    # ownership/active-room data or routes need to change.
+    RoomCatalogEntry(room_type=RoomType.COUPLE_HOME, display_name="Lauruch Loft", order=0, price=0),
     RoomCatalogEntry(room_type=RoomType.COZY_LOFT, display_name="Cozy Loft", order=1, price=2500),
+    RoomCatalogEntry(room_type=RoomType.AFTER_HOURS, display_name="After Hours", order=2, price=5000),
 ]
 
 

@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import type { RefObject } from 'react'
+import { GamingActivity } from '../gaming/GamingActivity'
 import { AmbientVideo } from './AmbientVideo'
 import { ROOM_WORLD_HEIGHT, ROOM_WORLD_WIDTH } from './constants'
 import { RoomCloseUp } from './hotspots/RoomCloseUp'
@@ -234,9 +235,15 @@ export const CozyLoftRoom = forwardRef<CozyLoftRoomHandle, CozyLoftRoomProps>(fu
           label={activeHotspot.label}
           onBack={leaveHotspot}
           isLeaving={phase.status === 'leaving'}
+          wideActivity={activeHotspot.id === 'gaming'}
+          // Physically accepted on LaurUch's TV first (see RoomCloseUp's
+          // own `enableDirectDrag` doc comment); this shared call site
+          // renders both Cozy Loft close-ups (TV/Gaming), so promoting it
+          // here covers both.
+          enableDirectDrag
         >
           {activeHotspot.id === 'tv' && <TvActivity onOpenWatch={onOpenWatch} />}
-          {activeHotspot.id === 'gaming' && <GamingActivityShell />}
+          {activeHotspot.id === 'gaming' && <GamingActivity />}
         </RoomCloseUp>
       )}
     </div>
@@ -279,17 +286,3 @@ function TvActivity({ onOpenWatch }: { onOpenWatch: () => void }) {
   )
 }
 
-/** The gaming close-up's selection surface — a shell only, over/around
- * the monitor/desk while the surrounding gaming room stays visible
- * (approved composition, preserved as-is). No third-party game provider
- * is integrated in this slice, and nothing here is clickable/playable;
- * it exists to validate the close-up interaction and establish where
- * real game selection will land later. */
-function GamingActivityShell() {
-  return (
-    <div className={styles.activityPanel}>
-      <h3 className={styles.activityTitle}>Choose a Game</h3>
-      <p className={styles.activityNote}>Game selection is coming soon.</p>
-    </div>
-  )
-}
