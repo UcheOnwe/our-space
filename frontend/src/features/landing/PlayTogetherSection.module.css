@@ -1,0 +1,102 @@
+.wrap {
+  display: flex;
+  align-items: center;
+  gap: 64px;
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 0.7s ease-out,
+    transform 0.7s ease-out;
+}
+
+.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.copy {
+  flex: 1 1 360px;
+  max-width: 440px;
+}
+
+.headline {
+  font-family: var(--landing-heading, var(--heading));
+  font-weight: 700;
+  font-size: clamp(30px, 3.6vw, 44px);
+  line-height: 1.15;
+  color: var(--text-h);
+  margin: 0 0 20px;
+}
+
+.body {
+  font-size: 18px;
+  line-height: 1.55;
+  color: var(--text);
+  margin: 0;
+  max-width: 40ch;
+}
+
+.mediaStack {
+  flex: 1 1 480px;
+  /* Widened from 620px so gameplay gets a more cinematic presence now that
+     the page has real width to give it. */
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.still {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  /* See RoomReveal.module.css's own doc comment on `.still`. */
+  /* play-together.jpg's focal point is the shared pool-game overlay itself,
+     roughly centered but sitting slightly below frame-center — the desk/
+     window surroundings are environment context, not the subject. */
+  object-position: 50% 58%;
+  aspect-ratio: 2 / 1;
+  object-fit: cover;
+}
+
+.videoFrame {
+  border-radius: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wrap {
+    transition: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .wrap {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  /* See TogetherSection.module.css's own doc comment: a desktop `flex: 1 1
+     <px>` WIDTH basis becomes a minimum HEIGHT once `.wrap` stacks into a
+     column, forcing empty space below shorter content. */
+  .copy,
+  .mediaStack {
+    flex: 0 1 auto;
+  }
+
+  .copy {
+    max-width: 100%;
+  }
+
+  .mediaStack {
+    width: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .body {
+    margin-left: auto;
+    margin-right: auto;
+  }
+}

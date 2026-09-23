@@ -1,0 +1,89 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 0.7s ease-out,
+    transform 0.7s ease-out;
+}
+
+.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.headline {
+  font-family: var(--landing-heading, var(--heading));
+  font-weight: 700;
+  font-size: clamp(30px, 4vw, 48px);
+  line-height: 1.15;
+  color: var(--text-h);
+  margin: 0;
+}
+
+.body {
+  font-size: 18px;
+  color: var(--text);
+  max-width: 48ch;
+  margin: 0 0 24px;
+}
+
+.mediaGrid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 24px;
+  width: 100%;
+  /* Widened from 1080px so this section's media can use more of the
+     now-available full-bleed canvas instead of sitting in a narrow
+     centered column. */
+  max-width: 1360px;
+  align-items: start;
+}
+
+.primaryMedia {
+  border-radius: 20px;
+}
+
+.exampleFigure {
+  margin: 0;
+}
+
+.exampleImage {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  /* See RoomReveal.module.css's own doc comment on `.still` — reserves
+     layout space before load so IntersectionObserver-based reveals
+     elsewhere on the page measure real, final positions. */
+  aspect-ratio: 2 / 1;
+  object-fit: cover;
+  /* watch-together.jpg's focal point is the TV screen's own content (the
+     personalized birthday video), which sits slightly right-of-center and
+     in the upper half of the frame — the media console below is context. */
+  object-position: 55% 35%;
+}
+
+.caption {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text);
+  opacity: 0.75;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wrap {
+    transition: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .mediaGrid {
+    grid-template-columns: 1fr;
+  }
+}

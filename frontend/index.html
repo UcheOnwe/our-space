@@ -5,9 +5,24 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Our Space</title>
+    <!-- Landing page headings only (see pages/LandingPage.module.css's
+         own `--landing-heading` doc comment) — the rest of the app stays
+         on the existing system-ui stack. preconnect + one combined
+         request for exactly the two weights actually used. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&display=swap" rel="stylesheet" />
   </head>
   <body>
     <div id="root"></div>
+    <!-- The landing page's own portal target — see pages/LandingPage.tsx's
+         own doc comment for why: #root's `max-width: 960px` (index.css)
+         is exactly right for every authenticated/auth-form page, but a
+         landing page needs a true, unconstrained full-viewport canvas.
+         Portaling here sidesteps that constraint completely instead of
+         fighting it with per-section vw math (the previous, fragile
+         approach). Empty and inert on every other page. -->
+    <div id="landing-root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

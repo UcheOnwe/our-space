@@ -1,0 +1,104 @@
+.wrap {
+  display: flex;
+  align-items: center;
+  gap: 64px;
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 0.7s ease-out,
+    transform 0.7s ease-out;
+}
+
+.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.copy {
+  flex: 1 1 340px;
+  max-width: 420px;
+}
+
+.headline {
+  font-family: var(--landing-heading, var(--heading));
+  font-weight: 700;
+  font-size: clamp(30px, 3.6vw, 44px);
+  line-height: 1.15;
+  color: var(--text-h);
+  margin: 0 0 20px;
+}
+
+.body {
+  font-size: 18px;
+  line-height: 1.55;
+  color: var(--text);
+  margin: 0;
+  max-width: 38ch;
+}
+
+.figure {
+  flex: 1 1 520px;
+  /* Widened from 640px so the fridge/photo composition gets a more
+     cinematic presence now that the page has real width to give it. */
+  max-width: 760px;
+  margin: 0;
+}
+
+.image {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  /* See RoomReveal.module.css's own doc comment on `.still`. */
+  aspect-ratio: 2 / 1;
+  object-fit: cover;
+  /* personalize-fridge.jpg's focal point is the fridge's photo/magnet
+     collage, which sits in the right two-thirds of the frame — the closet
+     on the left is context, not the personalization subject. */
+  object-position: 68% 55%;
+}
+
+.caption {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text);
+  opacity: 0.75;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wrap {
+    transition: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .wrap {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  /* See TogetherSection.module.css's own doc comment: a desktop `flex: 1 1
+     <px>` WIDTH basis becomes a minimum HEIGHT once `.wrap` stacks into a
+     column, forcing empty space below shorter content. */
+  .copy,
+  .figure {
+    flex: 0 1 auto;
+  }
+
+  .copy {
+    max-width: 100%;
+  }
+
+  .figure {
+    width: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .body {
+    margin-left: auto;
+    margin-right: auto;
+  }
+}

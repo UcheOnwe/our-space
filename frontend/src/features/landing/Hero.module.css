@@ -1,0 +1,126 @@
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 48px;
+  /* `calc(100vh - <nav height>)`, not a fixed 86vh — the fixed value
+     didn't account for the nav bar sitting above it (plus its own
+     generous default section padding), which together pushed the
+     mascot below the first viewport on shorter screens — exactly the
+     "must not require scrolling to discover" bug this fixes. */
+  min-height: calc(100vh - 72px);
+  background: linear-gradient(180deg, var(--bg) 0%, var(--accent-bg) 100%);
+}
+
+/* Tighter than FullBleedSection's own default `.inner` padding — the
+   hero specifically must fit its headline/CTA/mascot inside the first
+   viewport; every OTHER section is fine asking for a scroll. */
+.heroInner {
+  padding-top: clamp(32px, 4vh, 56px) !important;
+  padding-bottom: clamp(32px, 4vh, 56px) !important;
+}
+
+.copy {
+  flex: 1 1 480px;
+  max-width: 640px;
+}
+
+.headline {
+  font-family: var(--landing-heading, var(--heading));
+  font-weight: 800;
+  /* Moderately reduced from an earlier, too-dominant clamp(48px, 7vw,
+     96px) — still oversized/editorial, but no longer consuming almost
+     the entire first viewport on its own; see this file's own doc
+     comment on the hero composition. */
+  font-size: clamp(40px, 5.2vw, 78px);
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  margin: 0 0 24px;
+  color: var(--text-h);
+}
+
+.subhead {
+  font-size: clamp(17px, 1.6vw, 20px);
+  line-height: 1.5;
+  color: var(--text);
+  max-width: 46ch;
+  margin: 0 0 32px;
+}
+
+.actions {
+  display: flex;
+  gap: 16px;
+}
+
+.cta {
+  padding: 16px 32px;
+  font-size: 17px;
+}
+
+.stage {
+  position: relative;
+  flex: 1 1 380px;
+  max-width: 480px;
+  aspect-ratio: 1;
+  --tilt-x: 0px;
+  --tilt-y: 0px;
+}
+
+.mascotLarge {
+  position: absolute;
+  inset: 8% 12%;
+  transition: transform 0.2s ease-out;
+}
+
+.stageTiltable .mascotLarge {
+  transform: translate(var(--tilt-x), var(--tilt-y));
+}
+
+.mascotSmall {
+  position: absolute;
+  width: 22%;
+  aspect-ratio: 1;
+  top: 4%;
+  right: 4%;
+  transition: transform 0.2s ease-out;
+}
+
+.stageTiltable .mascotSmall {
+  transform: translate(calc(var(--tilt-x) * -1.6), calc(var(--tilt-y) * -1.6));
+}
+
+@media (max-width: 1023px) {
+  .hero {
+    flex-direction: column;
+    text-align: center;
+    min-height: 0;
+    padding-top: 56px;
+  }
+
+  .copy {
+    max-width: 100%;
+  }
+
+  .subhead {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .actions {
+    justify-content: center;
+  }
+
+  .stage {
+    max-width: 300px;
+  }
+}
+
+@media (max-width: 700px) {
+  .headline {
+    font-size: clamp(38px, 12vw, 52px);
+  }
+
+  .cta {
+    width: 100%;
+  }
+}

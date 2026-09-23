@@ -1,0 +1,36 @@
+/* `--landing-heading` is scoped to this page only — every other page
+   keeps the app's existing system-ui heading font untouched. "Unbounded"
+   (loaded once via index.html) is a rounded-geometric DISPLAY face built
+   for large, bold headlines — chosen over an editorial serif because it
+   reads as bold/clean/modern-consumer-product rather than
+   magazine/literary, and its soft rounded terminals sit comfortably
+   beside the illustrated room art instead of competing with it. Falls
+   back to the app's own heading stack if the webfont hasn't loaded yet,
+   so the hierarchy still holds. */
+.page {
+  --landing-heading: 'Unbounded', var(--heading);
+  /* A fixed dark backdrop for this page's cinematic "always dark" moments
+     (RoomReveal, ExploreSection) — deliberately NOT `var(--text-h)`. That
+     variable is theme-reactive (see index.css's `prefers-color-scheme:
+     dark` block) and those two sections pair it with hardcoded LIGHT
+     foreground text; under an OS/browser dark-mode preference `--text-h`
+     itself flips to a near-white value, turning the "dark" section's
+     background light while its text stays light too — invisible text.
+     This token intentionally never changes with color-scheme, so those
+     sections stay dark-with-light-text regardless of visitor preference. */
+  --landing-dark: #2e2c28;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+/* While this page is portaled (see LandingPage.tsx's own doc comment),
+   #root itself renders with ZERO children — `:empty` matches ONLY that
+   exact situation. Every other page always has real content inside
+   #root, so index.css's own `#root { max-width: 960px; padding: … }`
+   rule is completely untouched for them; this only ever collapses the
+   now-empty box that would otherwise sit above the portaled content as
+   a tall blank gap (index.css's own `min-height: 100svh` + padding). */
+:global(#root:empty) {
+  padding: 0;
+  min-height: 0;
+}
