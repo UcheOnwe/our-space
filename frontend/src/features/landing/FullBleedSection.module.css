@@ -1,0 +1,20 @@
+.section {
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.inner {
+  max-width: 1680px;
+  margin: 0 auto;
+  /* clamp-based, not a fixed px value — grows with viewport but never
+     crowds the edge nor grows unreasonably huge past 1920px. */
+  padding: clamp(64px, 8vw, 112px) clamp(20px, 5vw, 64px);
+  box-sizing: border-box;
+}
+
+@media (max-width: 700px) {
+  .inner {
+    padding: 48px 20px;
+  }
+}

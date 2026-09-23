@@ -3,11 +3,14 @@ import { useAuth } from '../features/auth/AuthContext'
 import { CoupleProvider } from '../features/couples/CoupleContext'
 import { CompanionProfilePage } from '../pages/CompanionProfilePage'
 import { CompanionSetupPage } from '../pages/CompanionSetupPage'
+import { LandingPage } from '../pages/LandingPage'
 import { LoginPage } from '../pages/LoginPage'
 import { RegisterPage } from '../pages/RegisterPage'
 import { CoupleGate } from './CoupleGate'
+import styles from './AuthGate.module.css'
 
 type AuthenticatedView = 'app' | 'companion-profile' | 'companion-setup'
+type SignedOutView = 'landing' | 'login' | 'register'
 
 /**
  * Routes between the signed-out and signed-in experience based on auth
@@ -34,7 +37,11 @@ type AuthenticatedView = 'app' | 'companion-profile' | 'companion-setup'
  */
 export function AuthGate() {
   const { status } = useAuth()
-  const [view, setView] = useState<'login' | 'register'>('login')
+  // 'landing' is the new default signed-out view (the public entry
+  // experience — see pages/LandingPage.tsx) — an already-authenticated
+  // visitor never sees it at all, since that branch below is checked
+  // first and is completely unaffected by this state.
+  const [view, setView] = useState<SignedOutView>('landing')
   const [authenticatedView, setAuthenticatedView] = useState<AuthenticatedView>('app')
 
   if (status === 'loading') {
@@ -65,9 +72,24 @@ export function AuthGate() {
     )
   }
 
-  return view === 'login' ? (
-    <LoginPage onSwitchToRegister={() => setView('register')} />
-  ) : (
-    <RegisterPage onSwitchToLogin={() => setView('login')} />
+  if (view === 'landing') {
+    return <LandingPage onLogin={() => setView('login')} onGetStarted={() => setView('register')} />
+  }
+
+  // A small, local "back to the landing page" affordance — deliberately
+  // NOT built into LoginPage/RegisterPage themselves (per "do not modify
+  // working application functionality merely to support the landing
+  // page"): those components are untouched, and this wraps them instead.
+  return (
+    <div className={styles.signedOutWrap}>
+      <button type="button" className={styles.backLink} onClick={() => setView('landing')}>
+        ‹ Back to Our Space
+      </button>
+      {view === 'login' ? (
+        <LoginPage onSwitchToRegister={() => setView('register')} />
+      ) : (
+        <RegisterPage onSwitchToLogin={() => setView('login')} />
+      )}
+    </div>
   )
 }

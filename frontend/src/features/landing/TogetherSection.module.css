@@ -1,0 +1,106 @@
+.wrap {
+  display: flex;
+  align-items: center;
+  gap: 64px;
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 0.7s ease-out,
+    transform 0.7s ease-out;
+}
+
+.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.copy {
+  flex: 1 1 360px;
+  max-width: 480px;
+}
+
+.headline {
+  font-family: var(--landing-heading, var(--heading));
+  font-weight: 700;
+  font-size: clamp(30px, 3.6vw, 44px);
+  line-height: 1.15;
+  color: var(--text-h);
+  margin: 0 0 20px;
+}
+
+.body {
+  font-size: 18px;
+  line-height: 1.55;
+  color: var(--text);
+  margin: 0;
+  max-width: 42ch;
+}
+
+.media {
+  position: relative;
+  /* Narrower than a typical 16:9 media column on purpose — this section's
+     clip (together.mp4) is a natively portrait ~3:4 recording (see
+     VideoReveal's `aspectRatio` prop); at the wider 640px this column used
+     when every clip was assumed 16:9, a 3:4 frame renders unbalanced-tall
+     next to the copy column. */
+  flex: 1 1 340px;
+  max-width: 420px;
+}
+
+.companionRow {
+  position: absolute;
+  bottom: -28px;
+  left: -24px;
+  display: flex;
+  gap: 16px;
+}
+
+.companion {
+  width: 76px;
+  height: 76px;
+  filter: drop-shadow(0 10px 16px rgba(46, 44, 40, 0.2));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wrap {
+    transition: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .wrap {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  /* `.copy`/`.media`'s desktop `flex: 1 1 <px>` sets a WIDTH basis for the
+     side-by-side row layout above — once `.wrap` switches to a column, that
+     same basis is reinterpreted as a MINIMUM HEIGHT for each stacked block,
+     forcing empty space below shorter content. Reset to `auto` so each
+     block's height simply follows its own content on mobile. */
+  .copy,
+  .media {
+    flex: 0 1 auto;
+  }
+
+  .copy {
+    max-width: 100%;
+  }
+
+  .media {
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto;
+  }
+
+  .body {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .companionRow {
+    position: static;
+    justify-content: center;
+    margin-top: 20px;
+  }
+}

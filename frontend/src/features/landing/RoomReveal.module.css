@@ -1,0 +1,80 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 40px;
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 0.7s ease-out,
+    transform 0.7s ease-out;
+}
+
+.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.headline {
+  font-family: var(--landing-heading, var(--heading));
+  font-weight: 700;
+  font-size: clamp(30px, 4.4vw, 52px);
+  line-height: 1.15;
+  text-align: center;
+  color: #faf7f2;
+  max-width: 20ch;
+  margin: 0;
+}
+
+.stillFrame {
+  width: 100%;
+  /* Widened from 1200px — the room reveal is this product's strongest
+     visual asset and the page now has real width to give it (see
+     FullBleedSection's 1680px canvas); this is the "give the room artwork
+     room" cinematic-composition ask, not a redesign of this section. */
+  max-width: 1440px;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.5);
+}
+
+.still {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* Reserves the right space BEFORE the image loads — without this, the
+     whole page is far shorter than its final height until every image
+     finishes loading, which was making IntersectionObserver (see
+     useScrollReveal.ts) misreport far-below-fold sections as already
+     visible on first layout, triggering every video's download at once
+     (the exact thing this page's performance strategy exists to avoid).
+     All of this room's own stills are close enough to 2:1 that a single
+     ratio + object-fit reads as correct, uncropped source composition. */
+  aspect-ratio: 2 / 1;
+  object-fit: cover;
+  /* room-reveal.jpg's focal point is the couch/TV cluster in the lower two
+     -thirds of the frame — the ceiling and cherry-blossom branch along the
+     top edge are decorative and safe to crop first. */
+  object-position: 50% 65%;
+}
+
+.videoRow {
+  width: 100%;
+  max-width: 640px;
+}
+
+.videoFrame {
+  border-radius: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wrap {
+    transition: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .stillFrame {
+    border-radius: 16px;
+  }
+}
