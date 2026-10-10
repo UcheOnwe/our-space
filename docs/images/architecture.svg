@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="560" viewBox="0 0 800 560" role="img" aria-labelledby="t d">
+  <title id="t">Our Space architecture</title>
+  <desc id="d">A React and TypeScript single-page app talks to Nginx on AWS EC2 (Ubuntu). Nginx serves the static build, proxies REST calls under /api and WebSocket upgrades under /ws to a Daphne ASGI server in Docker. Django REST Framework handles REST; Django Channels handles presence over WebSockets. Both use PostgreSQL; the diagram does not specify where the production database is hosted. Watch Together uses REST polling with anchor-based drift correction.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#57606a"/>
+    </marker>
+  </defs>
+  <style>
+    .card{fill:#ffffff;stroke:#d0d7de;stroke-width:1.5}
+    .box{fill:#f6f8fa;stroke:#8c959f;stroke-width:1.5}
+    .web{fill:#eef6ff;stroke:#3178c6;stroke-width:1.5}
+    .srv{fill:#eef7f1;stroke:#2f7d4f;stroke-width:1.5}
+    .rt{fill:#fff6e8;stroke:#c27c0e;stroke-width:1.5}
+    .db{fill:#eaf4fb;stroke:#336791;stroke-width:1.5}
+    .lbl{font:600 19px -apple-system,'Segoe UI',Helvetica,Arial,sans-serif;fill:#1f2328}
+    .sub{font:15px -apple-system,'Segoe UI',Helvetica,Arial,sans-serif;fill:#57606a}
+    .cap{font:600 14px -apple-system,'Segoe UI',Helvetica,Arial,sans-serif;fill:#57606a;letter-spacing:1.5px}
+    .tag{font:600 14px ui-monospace,SFMono-Regular,Consolas,monospace;fill:#57606a}
+    .ln{stroke:#57606a;stroke-width:2;fill:none}
+  </style>
+  <rect class="card" x="1" y="1" width="798" height="558" rx="14"/>
+
+  <text class="cap" x="32" y="40">BROWSER</text>
+  <rect class="web" x="32" y="54" width="736" height="66" rx="10"/>
+  <text class="lbl" x="400" y="84" text-anchor="middle">React 19 + TypeScript SPA</text>
+  <text class="sub" x="400" y="106" text-anchor="middle">YouTube IFrame player · pixi.js rooms · Chrome MV3 companion extension (dev build)</text>
+
+  <path class="ln" d="M400 120V150" marker-end="url(#a)"/>
+
+  <text class="cap" x="36" y="186">AWS EC2 · UBUNTU</text>
+  <rect class="box" x="32" y="198" width="736" height="58" rx="10"/>
+  <text class="lbl" x="150" y="233" text-anchor="middle">Nginx</text>
+  <text class="tag" x="300" y="226">/      → static build</text>
+  <text class="tag" x="300" y="245">/api/* → REST</text>
+  <text class="tag" x="530" y="226">/ws/*  → WebSocket upgrade</text>
+
+  <path class="ln" d="M330 256V286" marker-end="url(#a)"/>
+  <path class="ln" d="M590 256V284" marker-end="url(#a)"/>
+
+  <text class="cap" x="36" y="278">DOCKER · DAPHNE (ASGI)</text>
+  <rect class="srv" x="32" y="290" width="356" height="104" rx="10"/>
+  <text class="lbl" x="210" y="320" text-anchor="middle">Django REST Framework</text>
+  <text class="sub" x="210" y="343" text-anchor="middle">accounts · couples · watch</text>
+  <text class="sub" x="210" y="363" text-anchor="middle">rooms · uchem · companions</text>
+  <text class="sub" x="210" y="383" text-anchor="middle">session auth + CSRF</text>
+  <rect class="rt" x="412" y="290" width="356" height="104" rx="10"/>
+  <text class="lbl" x="590" y="320" text-anchor="middle">Django Channels</text>
+  <text class="sub" x="590" y="343" text-anchor="middle">PresenceConsumer · ws/presence/&lt;feature&gt;/</text>
+  <text class="sub" x="590" y="363" text-anchor="middle">per-couple groups · origin-checked</text>
+  <text class="sub" x="590" y="383" text-anchor="middle">authenticated handshake</text>
+
+  <path class="ln" d="M210 394V436" marker-end="url(#a)"/>
+  <path class="ln" d="M590 394V416H420V436" marker-end="url(#a)"/>
+
+  <rect class="db" x="220" y="440" width="360" height="62" rx="10"/>
+  <text class="lbl" x="400" y="468" text-anchor="middle">PostgreSQL</text>
+  <text class="sub" x="400" y="489" text-anchor="middle">couples · watch sessions · rooms · wallets + ledger</text>
+
+  <text class="sub" x="400" y="534" text-anchor="middle">Infrastructure provisioned with Terraform · Watch sync over REST, presence over WebSockets</text>
+</svg>
